@@ -67,19 +67,19 @@
     </div>
 
     <form id="loginForm">
-      <div><label>Correo</label><input name="email" type="email" required autocomplete="username"></div>
-      <div><label>Contraseña</label><input name="password" type="password" required autocomplete="current-password"></div>
+      <div><label for="login-email">Correo</label><input id="login-email" name="email" type="email" required autocomplete="username"></div>
+      <div><label for="login-password">Contraseña</label><input id="login-password" name="password" type="password" required autocomplete="current-password"></div>
       <div class="err" id="loginErr"></div>
       <button type="submit">Entrar</button>
     </form>
 
     <form id="registerForm" hidden>
-      <div><label>Nombre completo</label><input name="nombre" required minlength="2" maxlength="120"></div>
-      <div><label>Identificación</label><input name="identificacion" required minlength="3" maxlength="30"></div>
-      <div><label>Correo</label><input name="email" type="email" required autocomplete="username"></div>
-      <div><label>Contraseña (mín. 8 caracteres)</label><input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
-      <div><label>Tipo de usuario</label>
-        <select name="tipo_usuario"><option value="estudiante">Estudiante</option><option value="docente">Docente</option><option value="externo">Externo</option></select></div>
+      <div><label for="reg-nombre">Nombre completo</label><input id="reg-nombre" name="nombre" required minlength="2" maxlength="120"></div>
+      <div><label for="reg-identificacion">Identificación</label><input id="reg-identificacion" name="identificacion" required minlength="3" maxlength="30"></div>
+      <div><label for="reg-email">Correo</label><input id="reg-email" name="email" type="email" required autocomplete="username"></div>
+      <div><label for="reg-password">Contraseña (mín. 8 caracteres)</label><input id="reg-password" name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
+      <div><label for="reg-tipo_usuario">Tipo de usuario</label>
+        <select id="reg-tipo_usuario" name="tipo_usuario"><option value="estudiante">Estudiante</option><option value="docente">Docente</option><option value="externo">Externo</option></select></div>
       <div class="err" id="registerErr"></div>
       <button type="submit">Crear cuenta</button>
     </form>
@@ -100,8 +100,8 @@
   <section class="card">
     <h2>Catálogo</h2>
     <div class="toolbar">
-      <input id="search" placeholder="Buscar por título o autor…" style="flex:2;min-width:180px">
-      <select id="catFilter"><option value="">Todas las categorías</option></select>
+      <input id="search" aria-label="Buscar libros" placeholder="Buscar por título o autor…" style="flex:2;min-width:180px">
+      <select id="catFilter" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select>
     </div>
     <table>
       <thead><tr><th>ID</th><th>Título</th><th>Autor</th><th>Categoría</th><th>Año</th><th>Disp.</th><th></th></tr></thead>
@@ -114,12 +114,12 @@
     <section class="card">
       <h2 id="formTitle">Agregar libro</h2>
       <form id="bookForm" class="grid">
-        <div class="full"><label>Título</label><input name="titulo" required maxlength="200"></div>
-        <div class="full"><label>Autor</label><input name="autor" required maxlength="120"></div>
-        <div><label>Categoría</label><input name="categoria" required maxlength="60"></div>
-        <div><label>Editorial</label><input name="editorial" maxlength="120"></div>
-        <div><label>Año</label><input name="anio" type="number" min="1000" max="2100"></div>
-        <div><label>Ejemplares totales</label><input name="ejemplares_totales" type="number" min="0" value="1" required></div>
+        <div class="full"><label for="book-titulo">Título</label><input id="book-titulo" name="titulo" required maxlength="200"></div>
+        <div class="full"><label for="book-autor">Autor</label><input id="book-autor" name="autor" required maxlength="120"></div>
+        <div><label for="book-categoria">Categoría</label><input id="book-categoria" name="categoria" required maxlength="60"></div>
+        <div><label for="book-editorial">Editorial</label><input id="book-editorial" name="editorial" maxlength="120"></div>
+        <div><label for="book-anio">Año</label><input id="book-anio" name="anio" type="number" min="1000" max="2100"></div>
+        <div><label for="book-ejemplares_totales">Ejemplares totales</label><input id="book-ejemplares_totales" name="ejemplares_totales" type="number" min="0" value="1" required></div>
         <div class="full actions"><button type="submit">Guardar</button><button type="button" class="ghost" id="cancel" hidden>Cancelar edición</button></div>
       </form>
     </section>
@@ -127,10 +127,10 @@
     <section class="card">
       <h2>🤖 Asistente de la biblioteca</h2>
       <div class="chat" id="chat"><div class="msg bot">Hola, pregúntame sobre los libros del catálogo.</div></div>
-      <select id="technique" style="margin-bottom:8px">
+      <select id="technique" aria-label="Técnica de prompting" style="margin-bottom:8px">
         <option value="zero-shot">Zero-shot</option><option value="few-shot">Few-shot</option><option value="cot">Chain-of-thought</option>
       </select>
-      <div class="actions"><input id="question" placeholder="¿Tienen libros de García Márquez?"><button id="ask" type="button">Enviar</button></div>
+      <div class="actions"><input id="question" aria-label="Pregunta al asistente" placeholder="¿Tienen libros de García Márquez?"><button id="ask" type="button">Enviar</button></div>
     </section>
   </div>
 </main>
