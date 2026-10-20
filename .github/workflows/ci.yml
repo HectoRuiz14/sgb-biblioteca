@@ -22,5 +22,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verificar migraciones (alembic upgrade head)
+        env:
+          DATABASE_URL: sqlite:///ci.db
+        run: alembic upgrade head
+
       - name: Ejecutar pruebas de integración
+        env:
+          SECRET_KEY: ci-secret-key
         run: pytest tests/ -v

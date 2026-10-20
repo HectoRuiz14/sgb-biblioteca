@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biblioteca SGB</title>
+<style>
+  :root{--bg:#f6f4ef;--card:#fff;--ink:#1f2933;--muted:#6b7280;--brand:#1d4e89;--brand2:#e8eff7;--line:#e5e1d8;--danger:#b42318;--ok:#067647}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  [hidden]{display:none!important}
+  header{background:var(--brand);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  header h1{margin:0;font-size:1.25rem}
+  header .who{display:flex;gap:12px;align-items:center;font-size:.9rem}
+  header a{color:#dbe7f5}
+  main{max-width:1180px;margin:0 auto;padding:20px;display:grid;grid-template-columns:1fr 360px;gap:20px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  h2{margin:0 0 12px;font-size:1.05rem}
+  input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:8px 14px;background:var(--brand);color:#fff}
+  button:disabled{opacity:.6;cursor:wait}
+  button.ghost{background:var(--brand2);color:var(--brand)}
+  button.danger{background:#fde8e6;color:var(--danger)}
+  button.sm{padding:4px 10px;font-size:.85rem}
+  header button{background:rgba(255,255,255,.18)}
+  label{font-size:.8rem;color:var(--muted)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .toolbar select{width:auto;flex:1;min-width:140px}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
+  .tag{background:var(--brand2);color:var(--brand);padding:2px 8px;border-radius:99px;font-size:.78rem}
+  .empty{color:var(--muted);padding:20px;text-align:center}
+  form.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  form .full{grid-column:1/-1}
+  .actions{display:flex;gap:6px}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;color:#fff;z-index:9;max-width:90vw}
+  .chat{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;margin-bottom:10px}
+  .msg{padding:9px 12px;border-radius:10px;font-size:.92rem;white-space:pre-wrap}
+  .me{background:var(--brand);color:#fff;align-self:flex-end}
+  .bot{background:var(--brand2)}
+  .meta{font-size:.75rem;color:var(--muted);margin-top:4px}
+  .side{display:flex;flex-direction:column;gap:20px}
+  /* login */
+  #authView{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(160deg,#1d4e89 0%,#2f6fb3 55%,#f6f4ef 55%)}
+  .auth{width:100%;max-width:420px}
+  .auth h1{margin:0 0 4px;font-size:1.4rem;text-align:center}
+  .auth p.sub{margin:0 0 16px;color:var(--muted);text-align:center;font-size:.9rem}
+  .tabs{display:flex;margin-bottom:14px;border-bottom:1px solid var(--line)}
+  .tabs button{flex:1;background:none;color:var(--muted);border-radius:0;border-bottom:2px solid transparent}
+  .tabs button.active{color:var(--brand);border-color:var(--brand);font-weight:600}
+  .auth form{display:grid;gap:10px}
+  .err{color:var(--danger);font-size:.85rem;min-height:1.1em}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN / REGISTRO ============ -->
+<div id="authView" hidden>
+  <div class="card auth">
+    <h1>📚 Biblioteca SGB</h1>
+    <p class="sub">Sistema de Gestión de Biblioteca</p>
+    <div class="tabs">
+      <button id="tabLogin" class="active" type="button">Iniciar sesión</button>
+      <button id="tabRegister" type="button">Registrarse</button>
+    </div>
+
+    <form id="loginForm">
+      <div><label>Correo</label><input name="email" type="email" required autocomplete="username"></div>
+      <div><label>Contraseña</label><input name="password" type="password" required autocomplete="current-password"></div>
+      <div class="err" id="loginErr"></div>
+      <button type="submit">Entrar</button>
+    </form>
+
+    <form id="registerForm" hidden>
+      <div><label>Nombre completo</label><input name="nombre" required minlength="2" maxlength="120"></div>
+      <div><label>Identificación</label><input name="identificacion" required minlength="3" maxlength="30"></div>
+      <div><label>Correo</label><input name="email" type="email" required autocomplete="username"></div>
+      <div><label>Contraseña (mín. 8 caracteres)</label><input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></div>
+      <div><label>Tipo de usuario</label>
+        <select name="tipo_usuario"><option value="estudiante">Estudiante</option><option value="docente">Docente</option><option value="externo">Externo</option></select></div>
+      <div class="err" id="registerErr"></div>
+      <button type="submit">Crear cuenta</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ APLICACIÓN ============ -->
+<div id="appView" hidden>
+<header>
+  <h1>📚 Sistema de Gestión de Biblioteca</h1>
+  <div class="who">
+    <span id="userName"></span>
+    <a href="/docs" target="_blank">API docs</a>
+    <button id="logout" type="button">Cerrar sesión</button>
+  </div>
+</header>
+<main>
+  <section class="card">
+    <h2>Catálogo</h2>
+    <div class="toolbar">
+      <input id="search" placeholder="Buscar por título o autor…" style="flex:2;min-width:180px">
+      <select id="catFilter"><option value="">Todas las categorías</option></select>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Título</th><th>Autor</th><th>Categoría</th><th>Año</th><th>Disp.</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty" hidden>No hay libros. Agrega uno con el formulario.</div>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <h2 id="formTitle">Agregar libro</h2>
+      <form id="bookForm" class="grid">
+        <div class="full"><label>Título</label><input name="titulo" required maxlength="200"></div>
+        <div class="full"><label>Autor</label><input name="autor" required maxlength="120"></div>
+        <div><label>Categoría</label><input name="categoria" required maxlength="60"></div>
+        <div><label>Editorial</label><input name="editorial" maxlength="120"></div>
+        <div><label>Año</label><input name="anio" type="number" min="1000" max="2100"></div>
+        <div><label>Ejemplares totales</label><input name="ejemplares_totales" type="number" min="0" value="1" required></div>
+        <div class="full actions"><button type="submit">Guardar</button><button type="button" class="ghost" id="cancel" hidden>Cancelar edición</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>🤖 Asistente de la biblioteca</h2>
+      <div class="chat" id="chat"><div class="msg bot">Hola, pregúntame sobre los libros del catálogo.</div></div>
+      <select id="technique" style="margin-bottom:8px">
+        <option value="zero-shot">Zero-shot</option><option value="few-shot">Few-shot</option><option value="cot">Chain-of-thought</option>
+      </select>
+      <div class="actions"><input id="question" placeholder="¿Tienen libros de García Márquez?"><button id="ask" type="button">Enviar</button></div>
+    </section>
+  </div>
+</main>
+</div>
+<div id="toast" hidden></div>
+
+<script>
+const API = "/api/v1", KEY = "sgb_token";
+let books = [], editingId = null;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const store = {
+  get() { try { return localStorage.getItem(KEY); } catch { return null; } },
+  set(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch {} }
+};
+let token = store.get();
+
+function toast(msg, ok = true) {
+  const t = $("#toast"); t.textContent = msg; t.style.background = ok ? "var(--ok)" : "var(--danger)"; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 3000);
+}
+function errText(data, status) {
+  if (Array.isArray(data.detail)) return data.detail.map(d => `${(d.loc || []).slice(-1)[0]}: ${d.msg}`).join(" · ");
+  return typeof data.detail === "string" ? data.detail : "Error " + status;
+}
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) };
+  const r = await fetch(API + path, { ...opts, headers });
+  if (r.status === 204) return null;
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && token) { logout(); throw new Error("Tu sesión expiró. Inicia sesión de nuevo."); }
+  if (!r.ok) throw new Error(errText(data, r.status));
+  return data;
+}
+
+/* ---------- vistas ---------- */
+function showAuth() { $("#appView").hidden = true; $("#authView").hidden = false; }
+async function showApp() {
+  try {
+    const me = await api("/auth/me");
+    $("#userName").textContent = "👤 " + me.nombre;
+    $("#authView").hidden = true; $("#appView").hidden = false;
+    load();
+  } catch { showAuth(); }
+}
+function logout() { token = null; store.set(null); books = []; showAuth(); }
+$("#logout").onclick = logout;
+
+function tab(login) {
+  $("#loginForm").hidden = !login; $("#registerForm").hidden = login;
+  $("#tabLogin").classList.toggle("active", login); $("#tabRegister").classList.toggle("active", !login);
+}
+$("#tabLogin").onclick = () => tab(true); $("#tabRegister").onclick = () => tab(false);
+
+async function doLogin(email, password, errBox) {
+  try {
+    const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    token = r.access_token; store.set(token); showApp();
+  } catch (e) { errBox.textContent = e.message; }
+}
+$("#loginForm").addEventListener("submit", e => {
+  e.preventDefault(); $("#loginErr").textContent = "";
+  const f = new FormData(e.target); doLogin(f.get("email"), f.get("password"), $("#loginErr"));
+});
+$("#registerForm").addEventListener("submit", async e => {
+  e.preventDefault(); $("#registerErr").textContent = "";
+  const o = Object.fromEntries(new FormData(e.target));
+  try {
+    await api("/auth/register", { method: "POST", body: JSON.stringify(o) });
+    toast("Cuenta creada. Entrando…"); doLogin(o.email, o.password, $("#registerErr"));
+  } catch (err) { $("#registerErr").textContent = err.message; }
+});
+
+/* ---------- catálogo ---------- */
+async function load() {
+  try { books = await api("/libros?limit=200"); render(); }
+  catch (e) { toast("No se pudo cargar el catálogo: " + e.message, false); }
+}
+function render() {
+  const q = $("#search").value.toLowerCase(), cat = $("#catFilter").value;
+  const cats = [...new Set(books.map(b => b.categoria))].sort();
+  $("#catFilter").innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c => `<option ${c === cat ? "selected" : ""}>${esc(c)}</option>`).join("");
+  const list = books.filter(b => (!cat || b.categoria === cat) && `${b.titulo} ${b.autor}`.toLowerCase().includes(q));
+  $("#empty").hidden = list.length > 0;
+  $("#rows").innerHTML = list.map(b => `<tr>
+    <td>${b.id}</td><td><b>${esc(b.titulo)}</b></td><td>${esc(b.autor)}</td>
+    <td><span class="tag">${esc(b.categoria)}</span></td><td>${b.anio ?? "—"}</td><td>${b.ejemplares_disponibles}/${b.ejemplares_totales}</td>
+    <td><div class="actions"><button class="sm ghost" onclick="edit(${b.id})">Editar</button><button class="sm danger" onclick="del(${b.id})">Borrar</button></div></td></tr>`).join("");
+}
+function bookData() {
+  const o = Object.fromEntries(new FormData($("#bookForm")));
+  return { titulo: o.titulo, autor: o.autor, categoria: o.categoria, editorial: o.editorial || null,
+           anio: o.anio ? +o.anio : null, ejemplares_totales: +o.ejemplares_totales };
+}
+$("#bookForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    if (editingId) await api(`/libros/${editingId}`, { method: "PUT", body: JSON.stringify(bookData()) });
+    else await api("/libros", { method: "POST", body: JSON.stringify(bookData()) });
+    toast(editingId ? "Libro actualizado" : "Libro creado"); resetForm(); load();
+  } catch (err) { toast(err.message, false); }
+});
+function edit(id) {
+  const b = books.find(x => x.id === id), f = $("#bookForm"); editingId = id;
+  for (const k of ["titulo", "autor", "categoria", "editorial", "anio", "ejemplares_totales"]) f.elements[k].value = b[k] ?? "";
+  $("#formTitle").textContent = "Editar libro #" + id; $("#cancel").hidden = false;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() { editingId = null; $("#bookForm").reset(); $("#bookForm").elements.ejemplares_totales.value = 1;
+  $("#formTitle").textContent = "Agregar libro"; $("#cancel").hidden = true; }
+$("#cancel").onclick = resetForm;
+async function del(id) {
+  if (!confirm("¿Eliminar el libro #" + id + "?")) return;
+  try { await api(`/libros/${id}`, { method: "DELETE" }); toast("Libro eliminado"); load(); }
+  catch (e) { toast(e.message, false); }
+}
+$("#search").oninput = render; $("#catFilter").onchange = render;
+
+/* ---------- asistente IA ---------- */
+function addMsg(text, cls, meta) {
+  const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = text;
+  if (meta) { const m = document.createElement("div"); m.className = "meta"; m.textContent = meta; d.appendChild(m); }
+  $("#chat").appendChild(d); $("#chat").scrollTop = 1e9; return d;
+}
+async function ask() {
+  const question = $("#question").value.trim(); if (question.length < 3) return;
+  addMsg(question, "me"); $("#question").value = "";
+  const wait = addMsg("Pensando…", "bot"); $("#ask").disabled = true;
+  try {
+    const r = await api("/ai/ask", { method: "POST", body: JSON.stringify({ question, technique: $("#technique").value }) });
+    wait.remove();
+    addMsg(r.answer, "bot", `${r.technique} · ${r.model} · ${r.prompt_tokens}+${r.completion_tokens} tokens · ${r.latency_ms} ms · libros usados: [${r.sources.join(", ")}]`);
+  } catch (e) { wait.remove(); addMsg("⚠️ " + e.message, "bot"); }
+  $("#ask").disabled = false;
+}
+$("#ask").onclick = ask; $("#question").addEventListener("keydown", e => e.key === "Enter" && ask());
+
+token ? showApp() : showAuth();
+</script>
+</body>
+</html>

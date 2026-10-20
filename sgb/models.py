@@ -80,6 +80,9 @@ class Usuario(Base):
     tipo_usuario: Mapped[str] = mapped_column(String(20), default="estudiante")
     contacto: Mapped[Optional[str]] = mapped_column(String(120))
     activo: Mapped[bool] = mapped_column(default=True)
+    # Autenticación (Guía 5)
+    email: Mapped[Optional[str]] = mapped_column(String(120), unique=True, index=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255))
 
     prestamos: Mapped[List["Prestamo"]] = relationship(back_populates="usuario")
 
