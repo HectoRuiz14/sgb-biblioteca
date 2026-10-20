@@ -35,7 +35,7 @@ def generate(prompt: str) -> LLMResult:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "pon_tu_key_aqui":
         raise LLMUnavailable("GEMINI_API_KEY is not configured")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     timeout = float(os.getenv("LLM_TIMEOUT_SECONDS", "20"))
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}}
