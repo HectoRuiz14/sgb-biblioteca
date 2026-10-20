@@ -1,16 +1,28 @@
 """12 llamadas reales al LLM (4 preguntas x 3 técnicas) -> results/prompt_comparison.md
-Requisitos: servidor corriendo en :8000, GEMINI_API_KEY en .env y `python -m scripts.seed` ejecutado.
+Requisitos: servidor corriendo en :8000, GEMINI_API_KEY y DEMO_PASSWORD en .env, y `python -m scripts.seed` ejecutado.
 Uso: python -m scripts.compare_prompts"""
+import getpass
+import os
 import pathlib
 
 import httpx
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 BASE = "http://localhost:8000"
 QUESTIONS = ["Do you have books by García Márquez?", "¿Qué libros hay sobre software?",
              "Which Novela books have more than 2 copies available?", "Do you have anything about quantum physics?"]
 TECHNIQUES = ["zero-shot", "few-shot", "cot"]
 
-login = httpx.post(f"{BASE}/api/v1/auth/login", json={"email": "demo@sgb.local", "password": "Demo12345"}, timeout=30)
+# Credenciales del usuario demo: variables de entorno (.env) o se piden por consola. Nada escrito en el código.
+email = os.getenv("DEMO_EMAIL", "demo@sgb.local")
+clave = os.getenv("DEMO_PASSWORD") or getpass.getpass(f"Clave de {email}: ")
+login = httpx.post(f"{BASE}/api/v1/auth/login", json={"email": email, "password": clave}, timeout=30)
 login.raise_for_status()
 headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 

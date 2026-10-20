@@ -9,12 +9,12 @@ Sistema de Gestión de Biblioteca (Taller de Programación, UMB). Python + SQLAl
 ```bash
 python -m venv venv && source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                                   # completa GEMINI_API_KEY y SECRET_KEY
+cp .env.example .env                                   # completa GEMINI_API_KEY, SECRET_KEY y DEMO_PASSWORD
 alembic upgrade head                                   # crea/actualiza tablas (incluye email y password_hash)
 python -m scripts.seed                                 # usuario demo + libros de ejemplo
 uvicorn sgb.main:app --reload
 ```
-- Página web: http://localhost:8000/  (usuario demo: `demo@sgb.local` / `Demo12345`, o regístrate)
+- Página web: http://localhost:8000/  (usuario demo: `demo@sgb.local` con la clave de `DEMO_PASSWORD`, o regístrate)
 - Swagger UI: http://localhost:8000/docs  (botón **Authorize** → pega el token del login)
 
 > Si ya tenías un `biblioteca.db` de la Guía 4, `alembic upgrade head` solo agrega la migración nueva; no pierdes datos.
