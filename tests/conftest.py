@@ -9,8 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import sgb.models  # noqa: F401  (registra las tablas en Base.metadata)
-from sgb.database import Base, get_session
+import sgb.infrastructure.models  # noqa: F401  (registra las tablas en Base.metadata)
+from sgb.infrastructure.database import Base, get_session
 from sgb.main import app
 
 USUARIO = {"nombre": "Ana Torres", "identificacion": "1001", "email": "ana@example.com",

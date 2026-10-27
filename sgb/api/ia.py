@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from sgb import llm, rag
 from sgb.api.deps import get_current_user
-from sgb.database import get_session
+from sgb.infrastructure import llm, rag
+from sgb.infrastructure.database import get_session
 from sgb.prompts import build_prompt
 from sgb.schemas import AskRequest, AskResponse, ErrorOut
 

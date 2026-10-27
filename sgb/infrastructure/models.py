@@ -1,13 +1,5 @@
 """
-Modelos ORM del Sistema de Gestión de Biblioteca (SGB) usando SQLAlchemy
-(estilo declarativo tipado con Mapped / mapped_column).
-
-Entidades:
-    1. Autor
-    2. Categoria
-    3. Libro
-    4. Usuario
-    5. Prestamo
+Modelos ORM del Sistema de Gestión de Biblioteca (SGB) usando SQLAlchemy.
 """
 from datetime import date, timedelta
 from typing import List, Optional
@@ -15,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy import String, Integer, ForeignKey, Date, Float, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from sgb.database import Base
+from sgb.infrastructure.database import Base
 
 
 class Autor(Base):
@@ -80,7 +72,6 @@ class Usuario(Base):
     tipo_usuario: Mapped[str] = mapped_column(String(20), default="estudiante")
     contacto: Mapped[Optional[str]] = mapped_column(String(120))
     activo: Mapped[bool] = mapped_column(default=True)
-    # Autenticación (Guía 5)
     email: Mapped[Optional[str]] = mapped_column(String(120), unique=True, index=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255))
 
@@ -110,7 +101,7 @@ class Prestamo(Base):
     usuario: Mapped["Usuario"] = relationship(back_populates="prestamos")
 
     DIAS_PRESTAMO = {"estudiante": 8, "docente": 15, "externo": 5}
-    VALOR_MULTA_DIA = 1000  # pesos por día de retraso
+    VALOR_MULTA_DIA = 1000
 
     @staticmethod
     def calcular_fecha_limite(tipo_usuario: str, desde: date = None) -> date:

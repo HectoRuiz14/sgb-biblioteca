@@ -2,9 +2,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from sgb.database import get_session
-from sgb.models import Usuario
-from sgb.security import TokenError, decode_access_token
+from sgb.infrastructure.database import get_session
+from sgb.infrastructure.models import Usuario
+from sgb.infrastructure.security import TokenError, decode_access_token
 
 bearer = HTTPBearer(auto_error=False, description="Paste the JWT returned by /api/v1/auth/login")
 

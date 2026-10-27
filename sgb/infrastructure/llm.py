@@ -1,9 +1,11 @@
-"""Cliente de Gemini vía REST (httpx). Traduce fallos a excepciones propias."""
+"""Cliente de Gemini vía REST (httpx). Implementa LLMPort."""
 import os
 import time
-from dataclasses import dataclass
 
 import httpx
+
+from sgb.domain.asistente.entities import LLMResult
+from sgb.domain.asistente.ports import LLMPort
 
 
 class LLMError(Exception):
@@ -20,15 +22,6 @@ class LLMRateLimit(LLMError):
 
 class LLMUnavailable(LLMError):
     pass
-
-
-@dataclass
-class LLMResult:
-    text: str
-    prompt_tokens: int
-    completion_tokens: int
-    latency_ms: int
-    model: str
 
 
 def generate(prompt: str) -> LLMResult:
@@ -60,3 +53,10 @@ def generate(prompt: str) -> LLMResult:
         raise LLMUnavailable("Unexpected LLM response format")
     usage = data.get("usageMetadata", {})
     return LLMResult(text.strip(), usage.get("promptTokenCount", 0), usage.get("candidatesTokenCount", 0), latency, model)
+
+
+class GeminiLLMClient(LLMPort):
+    """Adaptador de infraestructura que implementa LLMPort."""
+
+    def generate(self, prompt: str) -> LLMResult:
+        return generate(prompt)

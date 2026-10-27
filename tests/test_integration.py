@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from sgb.database import Base
-from sgb.models import Autor, Categoria, Libro, Usuario
-from sgb.repositories import LibroRepository, UsuarioRepository, PrestamoRepository
+from sgb.infrastructure.database import Base
+from sgb.infrastructure.models import Autor, Categoria, Libro, Usuario
+from sgb.infrastructure.repositories import LibroRepository, UsuarioRepository, PrestamoRepository
 
 
 @pytest.fixture()

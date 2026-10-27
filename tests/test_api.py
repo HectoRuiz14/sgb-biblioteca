@@ -3,10 +3,10 @@ import time
 
 import pytest
 
-from sgb import llm
-from sgb.repositories import PrestamoRepository
-from sgb.models import Usuario
-from sgb.security import create_access_token
+from sgb.infrastructure import llm
+from sgb.infrastructure.repositories import PrestamoRepository
+from sgb.infrastructure.models import Usuario
+from sgb.infrastructure.security import create_access_token
 from tests.conftest import USUARIO
 
 LIBRO = {"titulo": "Cien años de soledad", "autor": "Gabriel García Márquez", "categoria": "Novela",

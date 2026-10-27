@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from sgb.api.deps import get_current_user
-from sgb.database import get_session
-from sgb.models import Autor, Categoria, Libro
-from sgb.repositories import LibroRepository
+from sgb.domain.catalogo.entities import Libro
+from sgb.infrastructure.database import get_session
+from sgb.infrastructure.models import Autor, Categoria, Libro as LibroModel
+from sgb.infrastructure.repositories import LibroRepository
 from sgb.schemas import ErrorOut, LibroIn, LibroOut
 
 router = APIRouter(prefix="/api/v1/libros", tags=["Books"], dependencies=[Depends(get_current_user)])
@@ -14,7 +15,8 @@ R404 = {404: {"model": ErrorOut, "description": "Book not found"}, **R401}
 
 
 def to_out(l: Libro) -> LibroOut:
-    return LibroOut(id=l.id, titulo=l.titulo, autor=l.autor.nombre, categoria=l.categoria.nombre,
+    return LibroOut(id=l.id, titulo=l.titulo, autor=l.autor.nombre if l.autor else "",
+                    categoria=l.categoria.nombre if l.categoria else "",
                     editorial=l.editorial, anio=l.anio, ejemplares_totales=l.ejemplares_totales,
                     ejemplares_disponibles=l.ejemplares_disponibles)
 
@@ -50,9 +52,9 @@ def _get_or_404(repo: LibroRepository, libro_id: int) -> Libro:
              summary="Create a book",
              description="Adds a book to the catalog. The author and category are created automatically if they do not exist.")
 def crear_libro(data: LibroIn, session: Session = Depends(get_session)):
-    libro = Libro(titulo=data.titulo.strip(), editorial=data.editorial, anio=data.anio,
-                  ejemplares_totales=data.ejemplares_totales, ejemplares_disponibles=data.ejemplares_totales,
-                  autor_id=_autor(session, data.autor).id, categoria_id=_categoria(session, data.categoria).id)
+    libro = LibroModel(titulo=data.titulo.strip(), editorial=data.editorial, anio=data.anio,
+                       ejemplares_totales=data.ejemplares_totales, ejemplares_disponibles=data.ejemplares_totales,
+                       autor_id=_autor(session, data.autor).id, categoria_id=_categoria(session, data.categoria).id)
     return to_out(LibroRepository(session).crear(libro))
 
 
@@ -65,10 +67,10 @@ def listar_libros(q: str | None = Query(None, description="Search in title or au
                   session: Session = Depends(get_session)):
     libros = LibroRepository(session).listar_con_autor()
     if categoria:
-        libros = [l for l in libros if l.categoria.nombre == categoria]
+        libros = [l for l in libros if l.categoria and l.categoria.nombre == categoria]
     if q:
         ql = q.lower()
-        libros = [l for l in libros if ql in l.titulo.lower() or ql in l.autor.nombre.lower()]
+        libros = [l for l in libros if ql in l.titulo.lower() or (l.autor and ql in l.autor.nombre.lower())]
     libros.sort(key=lambda l: l.id)
     return [to_out(l) for l in libros[skip:skip + limit]]
 
@@ -89,11 +91,10 @@ def actualizar_libro(libro_id: int, data: LibroIn, session: Session = Depends(ge
     disponibles = libro.ejemplares_disponibles + (data.ejemplares_totales - libro.ejemplares_totales)
     if disponibles < 0:
         raise HTTPException(status.HTTP_409_CONFLICT, "Total copies cannot be lower than the copies currently on loan")
-    repo.actualizar(libro_id, titulo=data.titulo.strip(), editorial=data.editorial, anio=data.anio,
-                    ejemplares_totales=data.ejemplares_totales, ejemplares_disponibles=disponibles,
-                    autor_id=_autor(session, data.autor).id, categoria_id=_categoria(session, data.categoria).id)
-    session.refresh(libro)
-    return to_out(libro)
+    actualizado = repo.actualizar(libro_id, titulo=data.titulo.strip(), editorial=data.editorial, anio=data.anio,
+                                  ejemplares_totales=data.ejemplares_totales, ejemplares_disponibles=disponibles,
+                                  autor_id=_autor(session, data.autor).id, categoria_id=_categoria(session, data.categoria).id)
+    return to_out(actualizado)
 
 
 @router.delete("/{libro_id}", status_code=status.HTTP_204_NO_CONTENT,

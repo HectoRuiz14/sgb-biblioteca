@@ -4,11 +4,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from sgb.api.deps import get_current_user
-from sgb.database import get_session
-from sgb.models import Usuario
-from sgb.repositories import UsuarioRepository
+from sgb.infrastructure.database import get_session
+from sgb.infrastructure.models import Usuario
+from sgb.infrastructure.repositories import UsuarioRepository
 from sgb.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UsuarioOut
-from sgb.security import create_access_token, hash_password, verify_password
+from sgb.infrastructure.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
