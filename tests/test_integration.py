@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from sgb.database import Base
-from sgb.models import Autor, Categoria, Libro, Usuario
-from sgb.repositories import LibroRepository, UsuarioRepository, PrestamoRepository
+from sgb.infrastructure.database import Base
+from sgb.infrastructure.models import Autor, Categoria, Libro, Usuario
+from sgb.infrastructure.repositories import LibroRepository, UsuarioRepository, PrestamoRepository
 
 
 @pytest.fixture()
@@ -80,11 +80,24 @@ def test_query_join_evita_n_mas_1(session, datos_base):
 def test_flujo_prestamo_y_devolucion_con_multa(session, datos_base):
     """Flujo completo: préstamo -> devolución -> cálculo de multa."""
     from datetime import date, timedelta
+    from sgb.application.prestamos_service import PrestamosService
+    from sgb.infrastructure.repositories import SQLAlchemyUnitOfWork
 
     repo_prestamo = PrestamoRepository(session)
     repo_libro = LibroRepository(session)
+    repo_usuario = UsuarioRepository(session)
+    uow = SQLAlchemyUnitOfWork(session)
 
-    prestamo = repo_prestamo.crear(
+    fecha_inicio = date.today()
+    service = PrestamosService(
+        prestamo_repo=repo_prestamo,
+        libro_repo=repo_libro,
+        usuario_repo=repo_usuario,
+        uow=uow,
+        hoy=lambda: fecha_inicio,
+    )
+
+    prestamo = service.crear_prestamo(
         libro_id=datos_base["libro"].id,
         usuario_id=datos_base["usuario"].id,
     )
@@ -93,10 +106,11 @@ def test_flujo_prestamo_y_devolucion_con_multa(session, datos_base):
     libro_actualizado = repo_libro.obtener(datos_base["libro"].id)
     assert libro_actualizado.ejemplares_disponibles == 2
 
-    prestamo.fecha_limite = date.today() - timedelta(days=3)
-    session.commit()
+    # Simular devolución tardía (3 días después de la fecha límite)
+    fecha_devolucion = prestamo.fecha_limite + timedelta(days=3)
+    service.hoy = lambda: fecha_devolucion
 
-    devuelto = repo_prestamo.registrar_devolucion(prestamo.id)
+    devuelto = service.registrar_devolucion(prestamo.id)
     assert devuelto.fecha_devolucion is not None
     assert devuelto.multa > 0
 

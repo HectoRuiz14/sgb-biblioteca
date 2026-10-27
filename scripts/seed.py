@@ -3,10 +3,10 @@ Primero aplica las migraciones:  alembic upgrade head"""
 import os
 import secrets
 
-from sgb.database import SessionLocal
-from sgb.models import Autor, Categoria, Libro, Usuario
-from sgb.repositories import LibroRepository, UsuarioRepository
-from sgb.security import hash_password
+from sgb.infrastructure.database import SessionLocal
+from sgb.infrastructure.models import Autor, Categoria, Libro, Usuario
+from sgb.infrastructure.repositories import LibroRepository, UsuarioRepository
+from sgb.infrastructure.security import hash_password
 
 # La clave del usuario demo NO está escrita en el código: se lee de DEMO_PASSWORD (.env) o se genera al azar.
 DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@sgb.local")

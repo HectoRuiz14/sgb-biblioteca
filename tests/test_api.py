@@ -3,10 +3,22 @@ import time
 
 import pytest
 
-from sgb import llm
-from sgb.repositories import PrestamoRepository
-from sgb.models import Usuario
-from sgb.security import create_access_token
+from sgb.domain.exceptions import (
+    LLMError,
+    LLMRateLimit,
+    LLMTimeout,
+    LLMUnavailable,
+)
+from sgb.application.prestamos_service import PrestamosService
+from sgb.infrastructure import llm
+from sgb.infrastructure.models import Usuario
+from sgb.infrastructure.repositories import (
+    LibroRepository,
+    PrestamoRepository,
+    SQLAlchemyUnitOfWork,
+    UsuarioRepository,
+)
+from sgb.infrastructure.security import create_access_token
 from tests.conftest import USUARIO
 
 LIBRO = {"titulo": "Cien años de soledad", "autor": "Gabriel García Márquez", "categoria": "Novela",
@@ -68,7 +80,13 @@ def test_errores_http(client, auth_headers):
     lid = client.post("/api/v1/libros", json={**LIBRO, "ejemplares_totales": 1}, headers=auth_headers).json()["id"]
     with client.session_factory() as s:
         uid = s.query(Usuario).first().id
-        PrestamoRepository(s).crear(libro_id=lid, usuario_id=uid)
+        service = PrestamosService(
+            PrestamoRepository(s),
+            LibroRepository(s),
+            UsuarioRepository(s),
+            SQLAlchemyUnitOfWork(s),
+        )
+        service.crear_prestamo(libro_id=lid, usuario_id=uid)
     assert client.delete(f"/api/v1/libros/{lid}", headers=auth_headers).status_code == 409
     assert client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "ejemplares_totales": 0}, headers=auth_headers).status_code == 409
 
@@ -90,7 +108,7 @@ def test_ia_usa_rag_y_llm(client, auth_headers, monkeypatch):
     assert client.post("/api/v1/ai/ask", json={"question": "hola libros"}).status_code == 401  # requiere login
 
 
-@pytest.mark.parametrize("exc,codigo", [(llm.LLMTimeout("t"), 504), (llm.LLMRateLimit("r"), 429), (llm.LLMUnavailable("u"), 502)])
+@pytest.mark.parametrize("exc,codigo", [(LLMTimeout("t"), 504), (LLMRateLimit("r"), 429), (LLMUnavailable("u"), 502)])
 def test_ia_errores_llm(client, auth_headers, monkeypatch, exc, codigo):
     def falla(prompt):
         raise exc

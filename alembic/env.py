@@ -5,8 +5,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from sgb.database import Base
-from sgb.models import Autor, Categoria, Libro, Usuario, Prestamo
+from sgb.infrastructure.database import Base
+from sgb.infrastructure.models import Autor, Categoria, Libro, Usuario, Prestamo
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
