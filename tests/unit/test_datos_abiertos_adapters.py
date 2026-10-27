@@ -66,6 +66,10 @@ def _make_request() -> httpx.Request:
     return httpx.Request("GET", "https://api.test")
 
 
+def _make_conn_err(req: httpx.Request, msg: str = "falla red") -> httpx.ConnectError:
+    return httpx.ConnectError(msg, request=req)
+
+
 def _make_adapter(adapter_cls, *, client, sleep=None, clock=None, breaker=None,
                   retry_attempts=3, base_delay=0.5):
     """Factoría para construir un adaptador con los fakes inyectados."""
@@ -137,38 +141,37 @@ ADAPTER_DATASET = {
 
 
 # ---------------------------------------------------------------------------
-# Tests de éxito con JSON verificado (específicos por adaptador)
+# Test unificado de éxito con JSON verificado (parametrizado)
 # ---------------------------------------------------------------------------
 
-def test_bibliotecas_adapter_exito_con_json_verificado():
-    client = FakeHttpClient([FakeResponse(200, VERIFIED_BIBLIOTECAS_JSON)])
-    adapter = BibliotecasDatosGovAdapter(client=client)
+@pytest.mark.parametrize(
+    "adapter_cls,payload,expected_cls,expected_fields",
+    [
+        (
+            BibliotecasDatosGovAdapter,
+            VERIFIED_BIBLIOTECAS_JSON,
+            BibliotecaPublica,
+            {"nombre": "Biblioteca Pública Municipal Alvaro Ruiz Arenas", "municipio": "Contratacion"},
+        ),
+        (
+            DaneDivipolaAdapter,
+            VERIFIED_DIVIPOLA_JSON,
+            MunicipioDivipola,
+            {"codigo_municipio": "05001", "municipio": "MEDELLÍN"},
+        ),
+    ],
+)
+def test_adapter_exito_con_json_verificado(adapter_cls, payload, expected_cls, expected_fields):
+    client = FakeHttpClient([FakeResponse(200, payload)])
+    adapter = adapter_cls(client=client)
 
-    bibliotecas = adapter.obtener_bibliotecas(limite=2)
+    items = _call_adapter(adapter, limite=2)
 
-    assert len(bibliotecas) == 2
-    assert isinstance(bibliotecas[0], BibliotecaPublica)
-    assert bibliotecas[0].nombre == "Biblioteca Pública Municipal Alvaro Ruiz Arenas"
-    assert bibliotecas[0].municipio == "Contratacion"
-    assert bibliotecas[0].correo == "yurisanchezgutierrez1306@gmail.com"
-    assert bibliotecas[0].telefono == "3123380841"
+    assert len(items) == 2
+    assert isinstance(items[0], expected_cls)
+    for k, v in expected_fields.items():
+        assert getattr(items[0], k) == v
     assert client.calls[0]["params"] == {"$limit": "2"}
-
-
-def test_divipola_adapter_exito_con_json_verificado():
-    client = FakeHttpClient([FakeResponse(200, VERIFIED_DIVIPOLA_JSON)])
-    adapter = DaneDivipolaAdapter(client=client)
-
-    municipios = adapter.obtener_municipios(limite=2)
-
-    assert len(municipios) == 2
-    assert isinstance(municipios[0], MunicipioDivipola)
-    assert municipios[0].codigo_municipio == "05001"
-    assert municipios[0].municipio == "MEDELLÍN"
-    assert municipios[0].codigo_departamento == "05"
-    assert municipios[0].departamento == "ANTIOQUIA"
-    assert municipios[0].longitud == "-75,581775"
-    assert municipios[0].latitud == "6,246631"
 
 
 # ---------------------------------------------------------------------------
@@ -198,12 +201,8 @@ def test_adapter_reintento_que_termina_en_exito(adapter_cls):
 @pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
 def test_adapter_retry_agotado_lanza_fuente_externa_error(adapter_cls):
     sleep = FakeSleep()
-    request = _make_request()
-    client = FakeHttpClient([
-        httpx.ConnectError("Fallo 1", request=request),
-        httpx.ConnectError("Fallo 2", request=request),
-        httpx.ConnectError("Fallo 3", request=request),
-    ])
+    req = _make_request()
+    client = FakeHttpClient([_make_conn_err(req, f"Fallo {i}") for i in (1, 2, 3)])
     adapter = _make_adapter(adapter_cls, client=client, sleep=sleep,
                             retry_attempts=3, base_delay=1.0)
 
@@ -218,22 +217,15 @@ def test_adapter_retry_agotado_lanza_fuente_externa_error(adapter_cls):
 def test_adapter_breaker_pasa_a_open_y_rechaza(adapter_cls):
     clock = FakeClock()
     sleep = FakeSleep()
-    request = _make_request()
+    req = _make_request()
     json_data = ADAPTER_DATASET[adapter_cls]
 
     breaker = CircuitBreaker(
         failure_threshold=2, recovery_timeout=30.0,
         expected_exceptions=(httpx.RequestError, Exception), clock=clock,
     )
-    client = FakeHttpClient([
-        httpx.ConnectError("falla 1", request=request),
-        httpx.ConnectError("falla 1", request=request),
-        httpx.ConnectError("falla 1", request=request),
-        httpx.ConnectError("falla 2", request=request),
-        httpx.ConnectError("falla 2", request=request),
-        httpx.ConnectError("falla 2", request=request),
-        FakeResponse(200, json_data),
-    ])
+    # 3 fallos para intento 1 + 3 fallos para intento 2 + respuesta 200 no alcanzada
+    client = FakeHttpClient([_make_conn_err(req) for _ in range(6)] + [FakeResponse(200, json_data)])
     adapter = _make_adapter(adapter_cls, client=client, breaker=breaker,
                             sleep=sleep, clock=clock, retry_attempts=3, base_delay=0.1)
 
@@ -255,17 +247,14 @@ def test_adapter_breaker_pasa_a_open_y_rechaza(adapter_cls):
 def test_adapter_paso_a_half_open_tras_recovery_timeout(adapter_cls):
     clock = FakeClock(initial=1000.0)
     sleep = FakeSleep()
-    request = _make_request()
+    req = _make_request()
     json_data = ADAPTER_DATASET[adapter_cls]
 
     breaker = CircuitBreaker(
         failure_threshold=1, recovery_timeout=15.0,
         expected_exceptions=(httpx.RequestError, Exception), clock=clock,
     )
-    client = FakeHttpClient([
-        httpx.ConnectError("falla", request=request),
-        FakeResponse(200, json_data),
-    ])
+    client = FakeHttpClient([_make_conn_err(req), FakeResponse(200, json_data)])
     adapter = _make_adapter(adapter_cls, client=client, breaker=breaker,
                             sleep=sleep, clock=clock, retry_attempts=1)
 

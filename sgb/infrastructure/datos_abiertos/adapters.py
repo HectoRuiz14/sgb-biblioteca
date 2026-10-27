@@ -27,12 +27,14 @@ RETRYABLE_EXCEPTIONS = (
 class _SocrataJsonAdapter:
     """Clase base privada con la lógica común de resiliencia y HTTP para adaptadores Socrata."""
 
+    DEFAULT_URL: str = ""
+    ERROR_LABEL: str = "fuente externa"
+
     def __init__(
         self,
-        *,
         client: Optional[Any] = None,
         breaker: Optional[CircuitBreaker] = None,
-        base_url: str,
+        base_url: Optional[str] = None,
         timeout: float = 10.0,
         retry_attempts: int = 3,
         base_delay: float = 0.5,
@@ -40,10 +42,9 @@ class _SocrataJsonAdapter:
         max_delay: float = 5.0,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
-        error_label: str = "fuente externa",
     ) -> None:
         self._client = client or httpx.Client(timeout=timeout)
-        self._base_url = base_url
+        self._base_url = base_url or self.DEFAULT_URL
         self._timeout = timeout
         self._retry_attempts = retry_attempts
         self._base_delay = base_delay
@@ -51,7 +52,6 @@ class _SocrataJsonAdapter:
         self._max_delay = max_delay
         self._sleep = sleep
         self._clock = clock
-        self._error_label = error_label
         self._breaker = breaker or CircuitBreaker(
             failure_threshold=3,
             recovery_timeout=30.0,
@@ -111,33 +111,14 @@ class _SocrataJsonAdapter:
         try:
             return self._breaker.call(_operacion_con_retry)
         except RETRYABLE_EXCEPTIONS as e:
-            raise FuenteExternaError(f"Error al consultar {self._error_label}: {e}") from e
+            raise FuenteExternaError(f"Error al consultar {self.ERROR_LABEL}: {e}") from e
 
 
 class BibliotecasDatosGovAdapter(_SocrataJsonAdapter, BibliotecasPort):
     """Adaptador para el dataset de bibliotecas de datos.gov.co con CircuitBreaker y Retry."""
 
     DEFAULT_URL = "https://www.datos.gov.co/resource/pkhg-bvje.json"
-
-    def __init__(
-        self,
-        client: Optional[Any] = None,
-        breaker: Optional[CircuitBreaker] = None,
-        base_url: str = DEFAULT_URL,
-        timeout: float = 10.0,
-        retry_attempts: int = 3,
-        base_delay: float = 0.5,
-        factor: float = 2.0,
-        max_delay: float = 5.0,
-        sleep: Callable[[float], None] = time.sleep,
-        clock: Callable[[], float] = time.monotonic,
-    ) -> None:
-        super().__init__(
-            client=client, breaker=breaker, base_url=base_url, timeout=timeout,
-            retry_attempts=retry_attempts, base_delay=base_delay, factor=factor,
-            max_delay=max_delay, sleep=sleep, clock=clock,
-            error_label="fuente de bibliotecas",
-        )
+    ERROR_LABEL = "fuente de bibliotecas"
 
     def _mapear(self, registro: Dict[str, Any]) -> Optional[BibliotecaPublica]:
         nombre = registro.get("nombre_de_la_biblioteca")
@@ -159,26 +140,7 @@ class DaneDivipolaAdapter(_SocrataJsonAdapter, DivipolaPort):
     """Adaptador para el dataset DIVIPOLA (DANE) de datos.gov.co con CircuitBreaker y Retry."""
 
     DEFAULT_URL = "https://www.datos.gov.co/resource/gdxc-w37w.json"
-
-    def __init__(
-        self,
-        client: Optional[Any] = None,
-        breaker: Optional[CircuitBreaker] = None,
-        base_url: str = DEFAULT_URL,
-        timeout: float = 10.0,
-        retry_attempts: int = 3,
-        base_delay: float = 0.5,
-        factor: float = 2.0,
-        max_delay: float = 5.0,
-        sleep: Callable[[float], None] = time.sleep,
-        clock: Callable[[], float] = time.monotonic,
-    ) -> None:
-        super().__init__(
-            client=client, breaker=breaker, base_url=base_url, timeout=timeout,
-            retry_attempts=retry_attempts, base_delay=base_delay, factor=factor,
-            max_delay=max_delay, sleep=sleep, clock=clock,
-            error_label="fuente DIVIPOLA",
-        )
+    ERROR_LABEL = "fuente DIVIPOLA"
 
     def _mapear(self, registro: Dict[str, Any]) -> Optional[MunicipioDivipola]:
         cod_mpio = registro.get("cod_mpio")

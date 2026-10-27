@@ -1,5 +1,5 @@
 """Esquemas Pydantic (entrada/salida de la API). Textos de documentación en inglés (OpenAPI)."""
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -79,3 +79,46 @@ class AskResponse(BaseModel):
     completion_tokens: int = Field(..., description="Output tokens reported by the LLM API")
     latency_ms: int
     sources: list[int] = Field(..., description="IDs of the books retrieved as context (RAG)")
+
+
+# ---------- Datos Abiertos y Analítica DuckDB ----------
+class MunicipioConteoOut(BaseModel):
+    municipio: str
+    total_bibliotecas: int
+
+
+class DepartamentoConteoOut(BaseModel):
+    departamento: str
+    total_bibliotecas: int
+
+
+class EstadisticasDescriptivasOut(BaseModel):
+    media: float
+    mediana: float
+    minimo: int
+    maximo: int
+
+
+class EstadisticasBibliotecasOut(BaseModel):
+    total_bibliotecas: int
+    total_municipios_con_biblioteca: int
+    porcentaje_con_correo: float
+    top_municipios: List[MunicipioConteoOut]
+
+
+class CruceDivipolaOut(BaseModel):
+    bibliotecas_por_departamento: List[DepartamentoConteoOut]
+    total_municipios_divipola: int = Field(
+        ...,
+        description="Total de municipios en DIVIPOLA pertenecientes a los departamentos cubiertos por el dataset",
+    )
+    municipios_sin_biblioteca: int = Field(
+        ...,
+        description="Municipios sin biblioteca registrada dentro de los departamentos cubiertos",
+    )
+    estadisticas_distribucion: EstadisticasDescriptivasOut
+
+
+class EstadoCircuitosOut(BaseModel):
+    bibliotecas: str
+    divipola: str
