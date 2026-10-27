@@ -2,7 +2,6 @@
 Repositorios CRUD para el SGB usando SQLAlchemy.
 Mapean explícitamente entre modelos ORM de infraestructura y entidades puras de dominio.
 """
-from datetime import date
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -14,8 +13,9 @@ from sgb.domain.catalogo.ports import (
     CategoriaRepositoryPort,
     LibroRepositoryPort,
 )
+from sgb.domain.exceptions import PrestamoNotFoundError
 from sgb.domain.prestamos.entities import Prestamo
-from sgb.domain.prestamos.ports import PrestamoRepositoryPort
+from sgb.domain.prestamos.ports import PrestamoRepositoryPort, UnitOfWorkPort
 from sgb.domain.usuarios.entities import Usuario
 from sgb.domain.usuarios.ports import UsuarioRepositoryPort
 from sgb.infrastructure.models import (
@@ -25,6 +25,17 @@ from sgb.infrastructure.models import (
     Prestamo as PrestamoModel,
     Usuario as UsuarioModel,
 )
+
+
+class SQLAlchemyUnitOfWork(UnitOfWorkPort):
+    def __init__(self, session: Session):
+        self.session = session
+
+    def commit(self) -> None:
+        self.session.commit()
+
+    def rollback(self) -> None:
+        self.session.rollback()
 
 
 class AutorRepository(AutorRepositoryPort):
@@ -198,14 +209,18 @@ class LibroRepository(LibroRepositoryPort):
         models = list(self.session.scalars(select(LibroModel)))
         return [self._to_domain(m) for m in models]
 
-    def actualizar(self, libro_id: int, **campos) -> Optional[Libro]:
+    def actualizar(self, libro_id: int, commit: bool = True, **campos) -> Optional[Libro]:
         model = self.session.get(LibroModel, libro_id)
         if not model:
             return None
         for clave, valor in campos.items():
             setattr(model, clave, valor)
-        self.session.commit()
-        self.session.refresh(model)
+        if commit:
+            self.session.commit()
+            self.session.refresh(model)
+        else:
+            self.session.flush()
+            self.session.refresh(model)
         return self.obtener(libro_id)
 
     def eliminar(self, libro_id: int) -> bool:
@@ -306,7 +321,8 @@ class PrestamoRepository(PrestamoRepositoryPort):
     def __init__(self, session: Session):
         self.session = session
 
-    def _to_domain(self, model: Optional[PrestamoModel]) -> Optional[Prestamo]:
+    @staticmethod
+    def _to_domain(model: Optional[PrestamoModel]) -> Optional[Prestamo]:
         if model is None:
             return None
         libro_domain = LibroRepository._to_domain(model.libro) if model.libro else None
@@ -321,43 +337,41 @@ class PrestamoRepository(PrestamoRepositoryPort):
             usuario_id=model.usuario_id,
             libro=libro_domain,
             usuario=usuario_domain,
-            _orm_model=model,
         )
 
-    @staticmethod
-    def _to_model(entity: Prestamo | PrestamoModel) -> PrestamoModel:
-        if isinstance(entity, PrestamoModel):
-            return entity
-        return PrestamoModel(
-            id=entity.id,
-            fecha_prestamo=entity.fecha_prestamo,
-            fecha_limite=entity.fecha_limite,
-            fecha_devolucion=entity.fecha_devolucion,
-            multa=entity.multa,
-            libro_id=entity.libro_id,
-            usuario_id=entity.usuario_id,
+    def agregar(self, prestamo: Prestamo, commit: bool = True) -> Prestamo:
+        model = PrestamoModel(
+            libro_id=prestamo.libro_id,
+            usuario_id=prestamo.usuario_id,
+            fecha_prestamo=prestamo.fecha_prestamo,
+            fecha_limite=prestamo.fecha_limite,
+            fecha_devolucion=prestamo.fecha_devolucion,
+            multa=prestamo.multa,
         )
+        self.session.add(model)
+        if commit:
+            self.session.commit()
+            self.session.refresh(model)
+        else:
+            self.session.flush()
+            self.session.refresh(model)
+        return self._to_domain(model)
 
-    def crear(self, libro_id: int, usuario_id: int) -> Prestamo:
-        usuario = self.session.get(UsuarioModel, usuario_id)
-        libro = self.session.get(LibroModel, libro_id)
-        if not usuario or not libro:
-            raise ValueError("Libro o usuario no existe")
-        if libro.ejemplares_disponibles < 1:
-            raise ValueError("No hay ejemplares disponibles para préstamo")
-
-        fecha_limite = Prestamo.calcular_fecha_limite(usuario.tipo_usuario)
-        prestamo = PrestamoModel(
-            libro_id=libro_id,
-            usuario_id=usuario_id,
-            fecha_prestamo=date.today(),
-            fecha_limite=fecha_limite,
-        )
-        libro.ejemplares_disponibles -= 1
-        self.session.add(prestamo)
-        self.session.commit()
-        self.session.refresh(prestamo)
-        return self._to_domain(prestamo)
+    def guardar(self, prestamo: Prestamo, commit: bool = True) -> Prestamo:
+        model = self.session.get(PrestamoModel, prestamo.id)
+        if not model:
+            raise PrestamoNotFoundError(f"Prestamo with id {prestamo.id} not found")
+        model.fecha_prestamo = prestamo.fecha_prestamo
+        model.fecha_limite = prestamo.fecha_limite
+        model.fecha_devolucion = prestamo.fecha_devolucion
+        model.multa = prestamo.multa
+        if commit:
+            self.session.commit()
+            self.session.refresh(model)
+        else:
+            self.session.flush()
+            self.session.refresh(model)
+        return self._to_domain(model)
 
     def obtener(self, prestamo_id: int) -> Optional[Prestamo]:
         model = self.session.get(PrestamoModel, prestamo_id)
@@ -366,19 +380,6 @@ class PrestamoRepository(PrestamoRepositoryPort):
     def listar(self) -> List[Prestamo]:
         models = list(self.session.scalars(select(PrestamoModel)))
         return [self._to_domain(m) for m in models]
-
-    def registrar_devolucion(self, prestamo_id: int) -> Optional[Prestamo]:
-        model = self.session.get(PrestamoModel, prestamo_id)
-        if not model:
-            return None
-        model.fecha_devolucion = date.today()
-        # Regla de cálculo de multa pura delegada a la entidad de dominio
-        domain_prestamo = self._to_domain(model)
-        model.multa = domain_prestamo.calcular_multa(model.fecha_devolucion)
-        model.libro.ejemplares_disponibles += 1
-        self.session.commit()
-        self.session.refresh(model)
-        return self._to_domain(model)
 
     def eliminar(self, prestamo_id: int) -> bool:
         model = self.session.get(PrestamoModel, prestamo_id)

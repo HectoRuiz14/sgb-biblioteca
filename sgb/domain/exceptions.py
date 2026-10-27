@@ -46,6 +46,16 @@ class InvalidEjemplaresError(ConflictError):
     pass
 
 
+class SinEjemplaresError(ConflictError):
+    """No copies available for loan."""
+    pass
+
+
+class PrestamoYaDevueltoError(ConflictError):
+    """Loan has already been returned."""
+    pass
+
+
 class AuthError(DomainError):
     pass
 

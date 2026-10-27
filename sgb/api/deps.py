@@ -16,6 +16,7 @@ from sgb.infrastructure.repositories import (
     CategoriaRepository,
     LibroRepository,
     PrestamoRepository,
+    SQLAlchemyUnitOfWork,
     UsuarioRepository,
 )
 from sgb.infrastructure.security import (
@@ -47,6 +48,9 @@ def get_usuarios_service(session: Session = Depends(get_session)) -> UsuariosSer
 def get_prestamos_service(session: Session = Depends(get_session)) -> PrestamosService:
     return PrestamosService(
         prestamo_repo=PrestamoRepository(session),
+        libro_repo=LibroRepository(session),
+        usuario_repo=UsuarioRepository(session),
+        uow=SQLAlchemyUnitOfWork(session),
     )
 
 

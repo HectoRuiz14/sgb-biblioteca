@@ -22,7 +22,7 @@ class LibroRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def actualizar(self, libro_id: int, **campos) -> Optional[Libro]:
+    def actualizar(self, libro_id: int, commit: bool = True, **campos) -> Optional[Libro]:
         """Actualiza campos específicos de un libro."""
         pass
 

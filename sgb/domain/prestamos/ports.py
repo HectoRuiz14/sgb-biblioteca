@@ -7,8 +7,13 @@ from .entities import Prestamo
 
 class PrestamoRepositoryPort(ABC):
     @abstractmethod
-    def crear(self, libro_id: int, usuario_id: int) -> Prestamo:
-        """Crea un nuevo préstamo verificando disponibilidad."""
+    def agregar(self, prestamo: Prestamo, commit: bool = True) -> Prestamo:
+        """Persiste una nueva entidad de préstamo."""
+        pass
+
+    @abstractmethod
+    def guardar(self, prestamo: Prestamo, commit: bool = True) -> Prestamo:
+        """Actualiza un préstamo existente."""
         pass
 
     @abstractmethod
@@ -22,11 +27,6 @@ class PrestamoRepositoryPort(ABC):
         pass
 
     @abstractmethod
-    def registrar_devolucion(self, prestamo_id: int) -> Optional[Prestamo]:
-        """Registra la devolución, calcula multa y restaura stock."""
-        pass
-
-    @abstractmethod
     def eliminar(self, prestamo_id: int) -> bool:
         """Elimina un registro de préstamo."""
         pass
@@ -34,4 +34,16 @@ class PrestamoRepositoryPort(ABC):
     @abstractmethod
     def historial_por_usuario(self, usuario_id: int) -> List[Prestamo]:
         """Obtiene el historial de préstamos de un usuario."""
+        pass
+
+
+class UnitOfWorkPort(ABC):
+    @abstractmethod
+    def commit(self) -> None:
+        """Confirma la transacción activa."""
+        pass
+
+    @abstractmethod
+    def rollback(self) -> None:
+        """Revierte la transacción activa."""
         pass

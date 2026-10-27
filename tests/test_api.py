@@ -9,9 +9,15 @@ from sgb.domain.exceptions import (
     LLMTimeout,
     LLMUnavailable,
 )
+from sgb.application.prestamos_service import PrestamosService
 from sgb.infrastructure import llm
 from sgb.infrastructure.models import Usuario
-from sgb.infrastructure.repositories import PrestamoRepository
+from sgb.infrastructure.repositories import (
+    LibroRepository,
+    PrestamoRepository,
+    SQLAlchemyUnitOfWork,
+    UsuarioRepository,
+)
 from sgb.infrastructure.security import create_access_token
 from tests.conftest import USUARIO
 
@@ -74,7 +80,13 @@ def test_errores_http(client, auth_headers):
     lid = client.post("/api/v1/libros", json={**LIBRO, "ejemplares_totales": 1}, headers=auth_headers).json()["id"]
     with client.session_factory() as s:
         uid = s.query(Usuario).first().id
-        PrestamoRepository(s).crear(libro_id=lid, usuario_id=uid)
+        service = PrestamosService(
+            PrestamoRepository(s),
+            LibroRepository(s),
+            UsuarioRepository(s),
+            SQLAlchemyUnitOfWork(s),
+        )
+        service.crear_prestamo(libro_id=lid, usuario_id=uid)
     assert client.delete(f"/api/v1/libros/{lid}", headers=auth_headers).status_code == 409
     assert client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "ejemplares_totales": 0}, headers=auth_headers).status_code == 409
 
