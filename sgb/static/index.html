@@ -97,6 +97,8 @@
   </div>
 </header>
 <main>
+<div>
+
   <section class="card">
     <h2>Catálogo</h2>
     <div class="toolbar">
@@ -109,6 +111,56 @@
     </table>
     <div id="empty" class="empty" hidden>No hay libros. Agrega uno con el formulario.</div>
   </section>
+
+  <section class="card" id="analyticsCard" style="margin-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <h2 style="margin:0">📊 Analítica de Bibliotecas Públicas y DIVIPOLA (DuckDB)</h2>
+      <button id="btnLoadAnalytics" type="button" class="sm">Actualizar datos</button>
+    </div>
+    
+    <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;font-size:0.85rem">
+      <span>Circuit Breaker Bibliotecas: <b id="cbBib" class="tag">VERIFICANDO…</b></span>
+      <span>Circuit Breaker DIVIPOLA: <b id="cbDiv" class="tag">VERIFICANDO…</b></span>
+    </div>
+
+    <!-- Metricas agregadas -->
+    <p style="font-size:0.78rem;color:var(--muted);margin:0 0 10px">ℹ️ <i>Alcance del cruce: DIVIPOLA se filtra automáticamente por los departamentos con presencia en el dataset de bibliotecas.</i></p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px">
+      <div style="background:var(--brand2);padding:10px;border-radius:8px;text-align:center">
+        <div style="font-size:0.75rem;color:var(--muted)">Total Bibliotecas</div>
+        <div id="metricTotalBib" style="font-size:1.4rem;font-weight:bold;color:var(--brand)">—</div>
+      </div>
+      <div style="background:var(--brand2);padding:10px;border-radius:8px;text-align:center">
+        <div style="font-size:0.75rem;color:var(--muted)">Mpios c/ Biblioteca</div>
+        <div id="metricMpiosBib" style="font-size:1.4rem;font-weight:bold;color:var(--brand)">—</div>
+      </div>
+      <div style="background:var(--brand2);padding:10px;border-radius:8px;text-align:center">
+        <div style="font-size:0.75rem;color:var(--muted)">% con Correo</div>
+        <div id="metricPctCorreo" style="font-size:1.4rem;font-weight:bold;color:var(--brand)">—</div>
+      </div>
+      <div style="background:var(--brand2);padding:10px;border-radius:8px;text-align:center">
+        <div style="font-size:0.75rem;color:var(--muted)">Sin biblio (deptos cubiertos)</div>
+        <div id="metricSinBib" style="font-size:1.4rem;font-weight:bold;color:var(--danger)">—</div>
+      </div>
+      <div style="background:var(--brand2);padding:10px;border-radius:8px;text-align:center">
+        <div style="font-size:0.75rem;color:var(--muted)">Media / Mediana (deptos)</div>
+        <div id="metricMediaMediana" style="font-size:1.1rem;font-weight:bold;color:var(--brand)">—</div>
+      </div>
+    </div>
+
+    <!-- Graficos y tablas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <h3 style="margin:0 0 8px;font-size:0.95rem">Top Municipios (Bibliotecas)</h3>
+        <div id="chartTopMpios" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 8px;font-size:0.95rem">Bibliotecas por Departamento</h3>
+        <div id="chartDeptos" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+  </section>
+</div>
 
   <div class="side">
     <section class="card">
@@ -209,7 +261,71 @@ $("#registerForm").addEventListener("submit", async e => {
 async function load() {
   try { books = await api("/libros?limit=200"); render(); }
   catch (e) { toast("No se pudo cargar el catálogo: " + e.message, false); }
+  loadAnalytics();
 }
+
+/* ---------- analítica datos abiertos ---------- */
+async function loadAnalytics() {
+  const btn = $("#btnLoadAnalytics");
+  if (btn) btn.disabled = true;
+  try {
+    const circuits = await api("/datos-abiertos/estado-circuitos");
+    updateCircuitBadge($("#cbBib"), circuits.bibliotecas);
+    updateCircuitBadge($("#cbDiv"), circuits.divipola);
+
+    const stats = await api("/datos-abiertos/estadisticas");
+    $("#metricTotalBib").textContent = stats.total_bibliotecas;
+    $("#metricMpiosBib").textContent = stats.total_municipios_con_biblioteca;
+    $("#metricPctCorreo").textContent = stats.porcentaje_con_correo + "%";
+    renderBarChart($("#chartTopMpios"), (stats.top_municipios || []).map(m => ({ label: m.municipio, val: m.total_bibliotecas })));
+
+    const cruce = await api("/datos-abiertos/cruce-divipola");
+    $("#metricSinBib").textContent = cruce.municipios_sin_biblioteca;
+    const dist = cruce.estadisticas_distribucion || {};
+    $("#metricMediaMediana").textContent = `${dist.media ?? 0} / ${dist.mediana ?? 0}`;
+    renderBarChart($("#chartDeptos"), (cruce.bibliotecas_por_departamento || []).map(d => ({ label: d.departamento, val: d.total_bibliotecas })));
+  } catch (err) {
+    toast("No se pudo cargar la analítica: " + err.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function updateCircuitBadge(el, status) {
+  if (!el) return;
+  el.textContent = status;
+  if (status === "CLOSED") {
+    el.style.background = "#e6f4ea"; el.style.color = "var(--ok)";
+  } else if (status === "OPEN") {
+    el.style.background = "#fde8e6"; el.style.color = "var(--danger)";
+  } else {
+    el.style.background = "#fef7e0"; el.style.color = "#b06000";
+  }
+}
+
+function renderBarChart(container, data) {
+  if (!container) return;
+  if (!data || !data.length) {
+    container.innerHTML = '<div class="empty" style="padding:10px">Sin datos</div>';
+    return;
+  }
+  const max = Math.max(...data.map(d => d.val), 1);
+  container.innerHTML = data.slice(0, 8).map(d => {
+    const pct = Math.round((d.val / max) * 100);
+    return `<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:2px">
+        <span>${esc(d.label)}</span><b>${d.val}</b>
+      </div>
+      <div style="background:var(--line);border-radius:4px;height:10px;overflow:hidden">
+        <div style="background:var(--brand);width:${pct}%;height:100%;border-radius:4px"></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+const btnAnalytics = $("#btnLoadAnalytics");
+if (btnAnalytics) btnAnalytics.onclick = loadAnalytics;
+
 function render() {
   const q = $("#search").value.toLowerCase(), cat = $("#catFilter").value;
   const cats = [...new Set(books.map(b => b.categoria))].sort();

@@ -3,12 +3,19 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from sgb.application.analisis_service import AnalisisService
 from sgb.application.asistente_service import AsistenteService
 from sgb.application.catalogo_service import CatalogoService
+from sgb.application.datos_abiertos_service import DatosAbiertosService
 from sgb.application.prestamos_service import PrestamosService
 from sgb.application.usuarios_service import UsuariosService
 from sgb.domain.usuarios.entities import Usuario
 from sgb.infrastructure.database import get_session
+from sgb.infrastructure.datos_abiertos.adapters import (
+    BibliotecasDatosGovAdapter,
+    DaneDivipolaAdapter,
+)
+from sgb.infrastructure.datos_abiertos.duckdb_adapter import DuckDBAnalisisAdapter
 from sgb.infrastructure.llm import GeminiLLMClient
 from sgb.infrastructure.rag import KeywordRAGRetriever
 from sgb.infrastructure.repositories import (
@@ -27,6 +34,10 @@ from sgb.infrastructure.security import (
 )
 
 bearer = HTTPBearer(auto_error=False, description="Paste the JWT returned by /api/v1/auth/login")
+
+_bibliotecas_adapter = BibliotecasDatosGovAdapter()
+_divipola_adapter = DaneDivipolaAdapter()
+_duckdb_adapter = DuckDBAnalisisAdapter()
 
 
 def get_catalogo_service(session: Session = Depends(get_session)) -> CatalogoService:
@@ -59,6 +70,33 @@ def get_asistente_service(session: Session = Depends(get_session)) -> AsistenteS
         llm_port=GeminiLLMClient(),
         retriever_port=KeywordRAGRetriever(session),
     )
+
+
+def get_bibliotecas_adapter() -> BibliotecasDatosGovAdapter:
+    return _bibliotecas_adapter
+
+
+def get_divipola_adapter() -> DaneDivipolaAdapter:
+    return _divipola_adapter
+
+
+def get_analisis_adapter() -> DuckDBAnalisisAdapter:
+    return _duckdb_adapter
+
+
+def get_datos_abiertos_service(
+    bib: BibliotecasDatosGovAdapter = Depends(get_bibliotecas_adapter),
+    div: DaneDivipolaAdapter = Depends(get_divipola_adapter),
+) -> DatosAbiertosService:
+    return DatosAbiertosService(bibliotecas_port=bib, divipola_port=div)
+
+
+def get_analisis_service(
+    bib: BibliotecasDatosGovAdapter = Depends(get_bibliotecas_adapter),
+    div: DaneDivipolaAdapter = Depends(get_divipola_adapter),
+    ana: DuckDBAnalisisAdapter = Depends(get_analisis_adapter),
+) -> AnalisisService:
+    return AnalisisService(bibliotecas_port=bib, divipola_port=div, analisis_port=ana)
 
 
 def get_current_user(
