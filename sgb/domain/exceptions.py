@@ -93,3 +93,8 @@ class LLMUnavailable(LLMError):
 class CircuitoAbiertoError(DomainError):
     """Lanzada cuando una llamada es rechazada porque el circuito está abierto o en prueba."""
     pass
+
+
+class FuenteExternaError(DomainError):
+    """Lanzada cuando una fuente externa no responde o devuelve una respuesta errónea."""
+    pass
