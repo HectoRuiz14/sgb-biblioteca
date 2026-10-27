@@ -8,11 +8,19 @@ from sgb.domain.datos_abiertos.ports import BibliotecasPort, DivipolaPort
 from sgb.domain.exceptions import CircuitoAbiertoError, FuenteExternaError
 
 
-def test_datos_abiertos_service_obtener_bibliotecas():
-    mock_bibliotecas_port = MagicMock(spec=BibliotecasPort)
-    mock_divipola_port = MagicMock(spec=DivipolaPort)
+@pytest.fixture
+def service():
+    """Fixture que inyecta MagicMocks de los dos puertos en el servicio."""
+    bib = MagicMock(spec=BibliotecasPort)
+    div = MagicMock(spec=DivipolaPort)
+    svc = DatosAbiertosService(bibliotecas_port=bib, divipola_port=div)
+    return svc, bib, div
 
-    bibliotecas_esperadas = [
+
+def test_datos_abiertos_service_obtener_bibliotecas(service):
+    svc, mock_bib, mock_div = service
+
+    esperadas = [
         BibliotecaPublica(
             nombre="Biblioteca Central",
             municipio="Bucaramanga",
@@ -20,25 +28,19 @@ def test_datos_abiertos_service_obtener_bibliotecas():
             telefono="3001234567",
         )
     ]
-    mock_bibliotecas_port.obtener_bibliotecas.return_value = bibliotecas_esperadas
+    mock_bib.obtener_bibliotecas.return_value = esperadas
 
-    service = DatosAbiertosService(
-        bibliotecas_port=mock_bibliotecas_port,
-        divipola_port=mock_divipola_port,
-    )
+    resultado = svc.obtener_bibliotecas(limite=10)
 
-    resultado = service.obtener_bibliotecas(limite=10)
-
-    assert resultado == bibliotecas_esperadas
-    mock_bibliotecas_port.obtener_bibliotecas.assert_called_once_with(limite=10)
-    mock_divipola_port.obtener_municipios.assert_not_called()
+    assert resultado == esperadas
+    mock_bib.obtener_bibliotecas.assert_called_once_with(limite=10)
+    mock_div.obtener_municipios.assert_not_called()
 
 
-def test_datos_abiertos_service_obtener_municipios():
-    mock_bibliotecas_port = MagicMock(spec=BibliotecasPort)
-    mock_divipola_port = MagicMock(spec=DivipolaPort)
+def test_datos_abiertos_service_obtener_municipios(service):
+    svc, mock_bib, mock_div = service
 
-    municipios_esperados = [
+    esperados = [
         MunicipioDivipola(
             codigo_departamento="68",
             departamento="SANTANDER",
@@ -49,45 +51,26 @@ def test_datos_abiertos_service_obtener_municipios():
             latitud="7.1253",
         )
     ]
-    mock_divipola_port.obtener_municipios.return_value = municipios_esperados
+    mock_div.obtener_municipios.return_value = esperados
 
-    service = DatosAbiertosService(
-        bibliotecas_port=mock_bibliotecas_port,
-        divipola_port=mock_divipola_port,
-    )
+    resultado = svc.obtener_municipios(limite=25)
 
-    resultado = service.obtener_municipios(limite=25)
-
-    assert resultado == municipios_esperados
-    mock_divipola_port.obtener_municipios.assert_called_once_with(limite=25)
-    mock_bibliotecas_port.obtener_bibliotecas.assert_not_called()
+    assert resultado == esperados
+    mock_div.obtener_municipios.assert_called_once_with(limite=25)
+    mock_bib.obtener_bibliotecas.assert_not_called()
 
 
-def test_datos_abiertos_service_propaga_circuito_abierto_error():
-    mock_bibliotecas_port = MagicMock(spec=BibliotecasPort)
-    mock_divipola_port = MagicMock(spec=DivipolaPort)
-
-    mock_bibliotecas_port.obtener_bibliotecas.side_effect = CircuitoAbiertoError("Circuito ABIERTO")
-
-    service = DatosAbiertosService(
-        bibliotecas_port=mock_bibliotecas_port,
-        divipola_port=mock_divipola_port,
-    )
+def test_datos_abiertos_service_propaga_circuito_abierto_error(service):
+    svc, mock_bib, _ = service
+    mock_bib.obtener_bibliotecas.side_effect = CircuitoAbiertoError("Circuito ABIERTO")
 
     with pytest.raises(CircuitoAbiertoError, match="Circuito ABIERTO"):
-        service.obtener_bibliotecas(limite=5)
+        svc.obtener_bibliotecas(limite=5)
 
 
-def test_datos_abiertos_service_propaga_fuente_externa_error():
-    mock_bibliotecas_port = MagicMock(spec=BibliotecasPort)
-    mock_divipola_port = MagicMock(spec=DivipolaPort)
-
-    mock_divipola_port.obtener_municipios.side_effect = FuenteExternaError("Fallo en servicio DANE")
-
-    service = DatosAbiertosService(
-        bibliotecas_port=mock_bibliotecas_port,
-        divipola_port=mock_divipola_port,
-    )
+def test_datos_abiertos_service_propaga_fuente_externa_error(service):
+    svc, _, mock_div = service
+    mock_div.obtener_municipios.side_effect = FuenteExternaError("Fallo en servicio DANE")
 
     with pytest.raises(FuenteExternaError, match="Fallo en servicio DANE"):
-        service.obtener_municipios(limite=5)
+        svc.obtener_municipios(limite=5)

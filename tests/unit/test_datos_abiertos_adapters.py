@@ -12,6 +12,10 @@ from sgb.infrastructure.datos_abiertos.adapters import (
 from sgb.infrastructure.resilience import CircuitBreaker, CircuitState
 
 
+# ---------------------------------------------------------------------------
+# Helpers y Fakes reutilizables
+# ---------------------------------------------------------------------------
+
 class FakeClock:
     def __init__(self, initial: float = 1000.0):
         self.current = initial
@@ -58,6 +62,34 @@ class FakeHttpClient:
         return resp
 
 
+def _make_request() -> httpx.Request:
+    return httpx.Request("GET", "https://api.test")
+
+
+def _make_adapter(adapter_cls, *, client, sleep=None, clock=None, breaker=None,
+                  retry_attempts=3, base_delay=0.5):
+    """Factoría para construir un adaptador con los fakes inyectados."""
+    kwargs = dict(client=client, retry_attempts=retry_attempts, base_delay=base_delay)
+    if sleep is not None:
+        kwargs["sleep"] = sleep
+    if clock is not None:
+        kwargs["clock"] = clock
+    if breaker is not None:
+        kwargs["breaker"] = breaker
+    return adapter_cls(**kwargs)
+
+
+def _call_adapter(adapter, limite=5):
+    """Invoca el método público del adaptador según su tipo."""
+    if isinstance(adapter, BibliotecasDatosGovAdapter):
+        return adapter.obtener_bibliotecas(limite=limite)
+    return adapter.obtener_municipios(limite=limite)
+
+
+# ---------------------------------------------------------------------------
+# Datos verificados de los endpoints reales
+# ---------------------------------------------------------------------------
+
 VERIFIED_BIBLIOTECAS_JSON = [
     {
         "no": "Yuri Mabel Sanchez Gutierrez",
@@ -98,6 +130,15 @@ VERIFIED_DIVIPOLA_JSON = [
     },
 ]
 
+ADAPTER_DATASET = {
+    BibliotecasDatosGovAdapter: VERIFIED_BIBLIOTECAS_JSON,
+    DaneDivipolaAdapter: VERIFIED_DIVIPOLA_JSON,
+}
+
+
+# ---------------------------------------------------------------------------
+# Tests de éxito con JSON verificado (específicos por adaptador)
+# ---------------------------------------------------------------------------
 
 def test_bibliotecas_adapter_exito_con_json_verificado():
     client = FakeHttpClient([FakeResponse(200, VERIFIED_BIBLIOTECAS_JSON)])
@@ -130,171 +171,140 @@ def test_divipola_adapter_exito_con_json_verificado():
     assert municipios[0].latitud == "6,246631"
 
 
-def test_adapter_reintento_que_termina_en_exito():
+# ---------------------------------------------------------------------------
+# Tests parametrizados para escenarios comunes a ambos adaptadores
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_reintento_que_termina_en_exito(adapter_cls):
     sleep = FakeSleep()
-    # 500 (reintentable), 429 (reintentable), luego 200 (éxito)
+    json_data = ADAPTER_DATASET[adapter_cls]
     client = FakeHttpClient([
         FakeResponse(500, text="Internal Server Error"),
         FakeResponse(429, text="Too Many Requests"),
-        FakeResponse(200, VERIFIED_BIBLIOTECAS_JSON),
+        FakeResponse(200, json_data),
     ])
-    adapter = BibliotecasDatosGovAdapter(
-        client=client,
-        retry_attempts=3,
-        base_delay=1.0,
-        factor=2.0,
-        sleep=sleep,
-    )
+    adapter = _make_adapter(adapter_cls, client=client, sleep=sleep,
+                            retry_attempts=3, base_delay=1.0)
 
-    resultado = adapter.obtener_bibliotecas(limite=5)
+    resultado = _call_adapter(adapter, limite=5)
 
     assert len(resultado) == 2
     assert len(client.calls) == 3
-    # Esperas registradas antes de intento 2 y 3: [1.0, 2.0]
     assert sleep.calls == [1.0, 2.0]
     assert adapter.breaker.state == CircuitState.CLOSED
 
 
-def test_adapter_retry_agotado_lanza_fuente_externa_error():
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_retry_agotado_lanza_fuente_externa_error(adapter_cls):
     sleep = FakeSleep()
-    request = httpx.Request("GET", "https://api.test")
-    # 3 fallos consecutivos de red agotan los 3 intentos
+    request = _make_request()
     client = FakeHttpClient([
-        httpx.ConnectError("Fallo de conexion 1", request=request),
-        httpx.ConnectError("Fallo de conexion 2", request=request),
-        httpx.ConnectError("Fallo de conexion 3", request=request),
+        httpx.ConnectError("Fallo 1", request=request),
+        httpx.ConnectError("Fallo 2", request=request),
+        httpx.ConnectError("Fallo 3", request=request),
     ])
-    adapter = BibliotecasDatosGovAdapter(
-        client=client,
-        retry_attempts=3,
-        base_delay=1.0,
-        factor=2.0,
-        sleep=sleep,
-    )
+    adapter = _make_adapter(adapter_cls, client=client, sleep=sleep,
+                            retry_attempts=3, base_delay=1.0)
 
-    with pytest.raises(FuenteExternaError, match="Error al consultar fuente de bibliotecas"):
-        adapter.obtener_bibliotecas(limite=5)
+    with pytest.raises(FuenteExternaError, match="Error al consultar"):
+        _call_adapter(adapter, limite=5)
 
     assert len(client.calls) == 3
     assert len(sleep.calls) == 2
 
 
-def test_adapter_breaker_pasa_a_open_tras_n_fallos_y_rechaza_con_circuito_abierto():
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_breaker_pasa_a_open_y_rechaza(adapter_cls):
     clock = FakeClock()
     sleep = FakeSleep()
-    request = httpx.Request("GET", "https://api.test")
+    request = _make_request()
+    json_data = ADAPTER_DATASET[adapter_cls]
 
     breaker = CircuitBreaker(
-        failure_threshold=2,
-        recovery_timeout=30.0,
-        expected_exceptions=(httpx.RequestError, Exception),
-        clock=clock,
+        failure_threshold=2, recovery_timeout=30.0,
+        expected_exceptions=(httpx.RequestError, Exception), clock=clock,
     )
     client = FakeHttpClient([
-        # Fallo 1 (3 reintentos)
-        httpx.ConnectError("falla red 1", request=request),
-        httpx.ConnectError("falla red 1", request=request),
-        httpx.ConnectError("falla red 1", request=request),
-        # Fallo 2 (3 reintentos) -> abre el breaker
-        httpx.ConnectError("falla red 2", request=request),
-        httpx.ConnectError("falla red 2", request=request),
-        httpx.ConnectError("falla red 2", request=request),
-        # Si se llamara en la 3ra daría 200, pero el breaker debe rechazarla sin llamar
-        FakeResponse(200, VERIFIED_DIVIPOLA_JSON),
+        httpx.ConnectError("falla 1", request=request),
+        httpx.ConnectError("falla 1", request=request),
+        httpx.ConnectError("falla 1", request=request),
+        httpx.ConnectError("falla 2", request=request),
+        httpx.ConnectError("falla 2", request=request),
+        httpx.ConnectError("falla 2", request=request),
+        FakeResponse(200, json_data),
     ])
-    adapter = DaneDivipolaAdapter(
-        client=client,
-        breaker=breaker,
-        retry_attempts=3,
-        base_delay=0.1,
-        sleep=sleep,
-        clock=clock,
-    )
+    adapter = _make_adapter(adapter_cls, client=client, breaker=breaker,
+                            sleep=sleep, clock=clock, retry_attempts=3, base_delay=0.1)
 
-    # 1er fallo
     with pytest.raises(FuenteExternaError):
-        adapter.obtener_municipios(limite=5)
+        _call_adapter(adapter)
     assert adapter.breaker.state == CircuitState.CLOSED
 
-    # 2do fallo -> pasa a OPEN
     with pytest.raises(FuenteExternaError):
-        adapter.obtener_municipios(limite=5)
+        _call_adapter(adapter)
     assert adapter.breaker.state == CircuitState.OPEN
 
-    # 3er intento -> rechazado inmediatamente por CircuitoAbiertoError sin llamar al cliente
     llamadas_previas = len(client.calls)
     with pytest.raises(CircuitoAbiertoError):
-        adapter.obtener_municipios(limite=5)
-
+        _call_adapter(adapter)
     assert len(client.calls) == llamadas_previas
 
 
-def test_adapter_paso_a_half_open_tras_recovery_timeout():
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_paso_a_half_open_tras_recovery_timeout(adapter_cls):
     clock = FakeClock(initial=1000.0)
     sleep = FakeSleep()
-    request = httpx.Request("GET", "https://api.test")
+    request = _make_request()
+    json_data = ADAPTER_DATASET[adapter_cls]
 
     breaker = CircuitBreaker(
-        failure_threshold=1,
-        recovery_timeout=15.0,
-        expected_exceptions=(httpx.RequestError, Exception),
-        clock=clock,
+        failure_threshold=1, recovery_timeout=15.0,
+        expected_exceptions=(httpx.RequestError, Exception), clock=clock,
     )
     client = FakeHttpClient([
-        # Abre el circuito
         httpx.ConnectError("falla", request=request),
-        # Respuesta exitosa de prueba
-        FakeResponse(200, VERIFIED_BIBLIOTECAS_JSON),
+        FakeResponse(200, json_data),
     ])
-    adapter = BibliotecasDatosGovAdapter(
-        client=client,
-        breaker=breaker,
-        retry_attempts=1,
-        sleep=sleep,
-        clock=clock,
-    )
+    adapter = _make_adapter(adapter_cls, client=client, breaker=breaker,
+                            sleep=sleep, clock=clock, retry_attempts=1)
 
     with pytest.raises(FuenteExternaError):
-        adapter.obtener_bibliotecas(limite=5)
+        _call_adapter(adapter)
     assert adapter.breaker.state == CircuitState.OPEN
 
-    # Antes del timeout (14.9s)
     clock.advance(14.9)
     assert adapter.breaker.state == CircuitState.OPEN
 
-    # Al cumplirse el timeout (15.0s) -> HALF_OPEN
     clock.advance(0.1)
     assert adapter.breaker.state == CircuitState.HALF_OPEN
 
-    # Llamada de prueba exitosa -> transiciona a CLOSED
-    res = adapter.obtener_bibliotecas(limite=2)
+    res = _call_adapter(adapter, limite=2)
     assert len(res) == 2
     assert adapter.breaker.state == CircuitState.CLOSED
 
 
-def test_adapter_json_invalido_lanza_fuente_externa_error_sin_reintentar():
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_json_invalido_lanza_fuente_externa_error_sin_reintentar(adapter_cls):
     sleep = FakeSleep()
-    # JSON que no es lista
     client = FakeHttpClient([FakeResponse(200, {"mensaje": "no es una lista"})])
-    adapter = BibliotecasDatosGovAdapter(client=client, retry_attempts=3, sleep=sleep)
+    adapter = _make_adapter(adapter_cls, client=client, sleep=sleep, retry_attempts=3)
 
     with pytest.raises(FuenteExternaError, match="Respuesta de la fuente no es una lista"):
-        adapter.obtener_bibliotecas()
+        _call_adapter(adapter)
 
-    # Errores de formato no deben reintentarse
     assert len(client.calls) == 1
     assert sleep.calls == []
 
 
-def test_adapter_error_http_4xx_no_reintenta():
+@pytest.mark.parametrize("adapter_cls", [BibliotecasDatosGovAdapter, DaneDivipolaAdapter])
+def test_adapter_error_http_4xx_no_reintenta(adapter_cls):
     sleep = FakeSleep()
-    # 404 Not Found
     client = FakeHttpClient([FakeResponse(404, text="Recurso no encontrado")])
-    adapter = DaneDivipolaAdapter(client=client, retry_attempts=3, sleep=sleep)
+    adapter = _make_adapter(adapter_cls, client=client, sleep=sleep, retry_attempts=3)
 
     with pytest.raises(FuenteExternaError, match="Error cliente HTTP 404"):
-        adapter.obtener_municipios()
+        _call_adapter(adapter)
 
-    # 4xx no se reintenta
     assert len(client.calls) == 1
     assert sleep.calls == []
