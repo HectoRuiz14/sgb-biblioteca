@@ -9,7 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from sgb.domain.catalogo.entities import Autor, Categoria, Libro
-from sgb.domain.catalogo.ports import LibroRepositoryPort
+from sgb.domain.catalogo.ports import (
+    AutorRepositoryPort,
+    CategoriaRepositoryPort,
+    LibroRepositoryPort,
+)
 from sgb.domain.prestamos.entities import Prestamo
 from sgb.domain.prestamos.ports import PrestamoRepositoryPort
 from sgb.domain.usuarios.entities import Usuario
@@ -21,6 +25,100 @@ from sgb.infrastructure.models import (
     Prestamo as PrestamoModel,
     Usuario as UsuarioModel,
 )
+
+
+class AutorRepository(AutorRepositoryPort):
+    def __init__(self, session: Session):
+        self.session = session
+
+    @staticmethod
+    def _to_domain(model: Optional[AutorModel]) -> Optional[Autor]:
+        if model is None:
+            return None
+        return Autor(
+            id=model.id,
+            nombre=model.nombre,
+            nacionalidad=model.nacionalidad,
+            _orm_model=model,
+        )
+
+    @staticmethod
+    def _to_model(entity: Autor | AutorModel) -> AutorModel:
+        if isinstance(entity, AutorModel):
+            return entity
+        return AutorModel(
+            id=entity.id,
+            nombre=entity.nombre,
+            nacionalidad=entity.nacionalidad,
+        )
+
+    def obtener_por_nombre(self, nombre: str) -> Optional[Autor]:
+        model = self.session.scalar(select(AutorModel).where(AutorModel.nombre == nombre.strip()))
+        return self._to_domain(model)
+
+    def crear(self, autor: Autor | AutorModel) -> Autor:
+        model = self._to_model(autor)
+        self.session.add(model)
+        self.session.commit()
+        self.session.refresh(model)
+        return self._to_domain(model)
+
+    def obtener_o_crear(self, nombre: str) -> Autor:
+        nombre = nombre.strip()
+        model = self.session.scalar(select(AutorModel).where(AutorModel.nombre == nombre))
+        if model is None:
+            model = AutorModel(nombre=nombre)
+            self.session.add(model)
+            self.session.flush()
+            self.session.commit()
+            self.session.refresh(model)
+        return self._to_domain(model)
+
+
+class CategoriaRepository(CategoriaRepositoryPort):
+    def __init__(self, session: Session):
+        self.session = session
+
+    @staticmethod
+    def _to_domain(model: Optional[CategoriaModel]) -> Optional[Categoria]:
+        if model is None:
+            return None
+        return Categoria(
+            id=model.id,
+            nombre=model.nombre,
+            _orm_model=model,
+        )
+
+    @staticmethod
+    def _to_model(entity: Categoria | CategoriaModel) -> CategoriaModel:
+        if isinstance(entity, CategoriaModel):
+            return entity
+        return CategoriaModel(
+            id=entity.id,
+            nombre=entity.nombre,
+        )
+
+    def obtener_por_nombre(self, nombre: str) -> Optional[Categoria]:
+        model = self.session.scalar(select(CategoriaModel).where(CategoriaModel.nombre == nombre.strip()))
+        return self._to_domain(model)
+
+    def crear(self, categoria: Categoria | CategoriaModel) -> Categoria:
+        model = self._to_model(categoria)
+        self.session.add(model)
+        self.session.commit()
+        self.session.refresh(model)
+        return self._to_domain(model)
+
+    def obtener_o_crear(self, nombre: str) -> Categoria:
+        nombre = nombre.strip()
+        model = self.session.scalar(select(CategoriaModel).where(CategoriaModel.nombre == nombre))
+        if model is None:
+            model = CategoriaModel(nombre=nombre)
+            self.session.add(model)
+            self.session.flush()
+            self.session.commit()
+            self.session.refresh(model)
+        return self._to_domain(model)
 
 
 class LibroRepository(LibroRepositoryPort):
@@ -77,7 +175,6 @@ class LibroRepository(LibroRepositoryPort):
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
-        # Asegurar carga de relaciones si están presentes
         if model.autor_id and not model.autor:
             model.autor = self.session.get(AutorModel, model.autor_id)
         if model.categoria_id and not model.categoria:
@@ -172,6 +269,14 @@ class UsuarioRepository(UsuarioRepositoryPort):
 
     def obtener(self, usuario_id: int) -> Optional[Usuario]:
         model = self.session.get(UsuarioModel, usuario_id)
+        return self._to_domain(model)
+
+    def obtener_por_email(self, email: str) -> Optional[Usuario]:
+        model = self.session.scalar(select(UsuarioModel).where(UsuarioModel.email == email.strip().lower()))
+        return self._to_domain(model)
+
+    def obtener_por_identificacion(self, identificacion: str) -> Optional[Usuario]:
+        model = self.session.scalar(select(UsuarioModel).where(UsuarioModel.identificacion == identificacion.strip()))
         return self._to_domain(model)
 
     def listar(self) -> List[Usuario]:

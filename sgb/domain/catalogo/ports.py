@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from .entities import Libro
+from .entities import Autor, Categoria, Libro
 
 
 class LibroRepositoryPort(ABC):
@@ -34,4 +34,32 @@ class LibroRepositoryPort(ABC):
     @abstractmethod
     def listar_con_autor(self) -> List[Libro]:
         """Lista libros con autor y categoría cargados en una sola operación."""
+        pass
+
+
+class AutorRepositoryPort(ABC):
+    @abstractmethod
+    def obtener_por_nombre(self, nombre: str) -> Optional[Autor]:
+        pass
+
+    @abstractmethod
+    def crear(self, autor: Autor) -> Autor:
+        pass
+
+    @abstractmethod
+    def obtener_o_crear(self, nombre: str) -> Autor:
+        pass
+
+
+class CategoriaRepositoryPort(ABC):
+    @abstractmethod
+    def obtener_por_nombre(self, nombre: str) -> Optional[Categoria]:
+        pass
+
+    @abstractmethod
+    def crear(self, categoria: Categoria) -> Categoria:
+        pass
+
+    @abstractmethod
+    def obtener_o_crear(self, nombre: str) -> Categoria:
         pass

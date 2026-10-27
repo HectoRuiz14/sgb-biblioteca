@@ -3,9 +3,15 @@ import time
 
 import pytest
 
+from sgb.domain.exceptions import (
+    LLMError,
+    LLMRateLimit,
+    LLMTimeout,
+    LLMUnavailable,
+)
 from sgb.infrastructure import llm
-from sgb.infrastructure.repositories import PrestamoRepository
 from sgb.infrastructure.models import Usuario
+from sgb.infrastructure.repositories import PrestamoRepository
 from sgb.infrastructure.security import create_access_token
 from tests.conftest import USUARIO
 
@@ -90,7 +96,7 @@ def test_ia_usa_rag_y_llm(client, auth_headers, monkeypatch):
     assert client.post("/api/v1/ai/ask", json={"question": "hola libros"}).status_code == 401  # requiere login
 
 
-@pytest.mark.parametrize("exc,codigo", [(llm.LLMTimeout("t"), 504), (llm.LLMRateLimit("r"), 429), (llm.LLMUnavailable("u"), 502)])
+@pytest.mark.parametrize("exc,codigo", [(LLMTimeout("t"), 504), (LLMRateLimit("r"), 429), (LLMUnavailable("u"), 502)])
 def test_ia_errores_llm(client, auth_headers, monkeypatch, exc, codigo):
     def falla(prompt):
         raise exc

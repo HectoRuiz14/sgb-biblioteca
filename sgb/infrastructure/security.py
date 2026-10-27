@@ -1,4 +1,6 @@
-"""Seguridad sin dependencias externas: hash de contraseñas (PBKDF2-SHA256) y tokens JWT (HS256)."""
+"""Seguridad sin dependencias externas: hash de contraseñas (PBKDF2-SHA256) y tokens JWT (HS256).
+Implementa PasswordHasherPort y TokenPort.
+"""
 import base64
 import hashlib
 import hmac
@@ -6,6 +8,9 @@ import json
 import os
 import secrets
 import time
+from typing import Any, Dict, Optional
+
+from sgb.domain.usuarios.ports import PasswordHasherPort, TokenPort
 
 ITERATIONS = 600_000
 TOKEN_MINUTES_DEFAULT = 60
@@ -76,3 +81,19 @@ def decode_access_token(token: str) -> dict:
     if payload.get("exp", 0) < time.time():
         raise TokenError("Token expired")
     return payload
+
+
+class PasswordHasher(PasswordHasherPort):
+    def hash(self, password: str) -> str:
+        return hash_password(password)
+
+    def verify(self, password: str, stored: Optional[str]) -> bool:
+        return verify_password(password, stored)
+
+
+class JWTTokenService(TokenPort):
+    def create_token(self, user_id: int, minutes: Optional[int] = None) -> str:
+        return create_access_token(user_id, minutes)
+
+    def decode_token(self, token: str) -> Dict[str, Any]:
+        return decode_access_token(token)

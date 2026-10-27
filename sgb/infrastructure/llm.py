@@ -6,22 +6,12 @@ import httpx
 
 from sgb.domain.asistente.entities import LLMResult
 from sgb.domain.asistente.ports import LLMPort
-
-
-class LLMError(Exception):
-    pass
-
-
-class LLMTimeout(LLMError):
-    pass
-
-
-class LLMRateLimit(LLMError):
-    pass
-
-
-class LLMUnavailable(LLMError):
-    pass
+from sgb.domain.exceptions import (
+    LLMError,
+    LLMRateLimit,
+    LLMTimeout,
+    LLMUnavailable,
+)
 
 
 def generate(prompt: str) -> LLMResult:
