@@ -87,3 +87,9 @@ class LLMRateLimit(LLMError):
 class LLMUnavailable(LLMError):
     """LLM no disponible o error de red / configuración."""
     pass
+
+
+# ---------- Excepciones de Resiliencia / Integraciones ----------
+class CircuitoAbiertoError(DomainError):
+    """Lanzada cuando una llamada es rechazada porque el circuito está abierto o en prueba."""
+    pass
