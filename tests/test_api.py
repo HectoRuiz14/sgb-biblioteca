@@ -18,7 +18,7 @@ from sgb.infrastructure.repositories import (
     SQLAlchemyUnitOfWork,
     UsuarioRepository,
 )
-from sgb.infrastructure.security import create_access_token
+from sgb.infrastructure.security import decode_access_token
 from tests.conftest import USUARIO
 
 LIBRO = {"titulo": "Cien años de soledad", "autor": "Gabriel García Márquez", "categoria": "Novela",
@@ -27,8 +27,9 @@ LIBRO = {"titulo": "Cien años de soledad", "autor": "Gabriel García Márquez",
 
 # ===== Integración 1: registro + login + perfil =====
 def test_registro_login_y_perfil(client):
-    r = client.post("/api/v1/auth/register", json=USUARIO)
+    r = client.post("/api/v1/auth/register", json={**USUARIO, "rol": "ADMIN"})
     assert r.status_code == 201 and "password" not in r.text and "password_hash" not in r.text
+    assert r.json()["rol"] == "USER"
 
     # duplicados -> 409
     assert client.post("/api/v1/auth/register", json=USUARIO).status_code == 409
@@ -41,43 +42,45 @@ def test_registro_login_y_perfil(client):
     ok = client.post("/api/v1/auth/login", json={"email": "ANA@example.com", "password": USUARIO["password"]})
     assert ok.status_code == 200
     token = ok.json()["access_token"]
+    assert ok.json()["roles"] == ["USER"]
+    assert decode_access_token(token)["roles"] == ["USER"]
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200 and me.json()["email"] == USUARIO["email"]
 
 
 # ===== Integración 2: CRUD completo de libros protegido por token =====
-def test_crud_libros(client, auth_headers):
+def test_crud_libros(client, admin_headers):
     assert client.get("/api/v1/libros").status_code == 401  # sin token
 
-    r = client.post("/api/v1/libros", json=LIBRO, headers=auth_headers)
+    r = client.post("/api/v1/libros", json=LIBRO, headers=admin_headers)
     assert r.status_code == 201
     libro = r.json()
     assert libro["autor"] == LIBRO["autor"] and libro["ejemplares_disponibles"] == 3
 
     lid = libro["id"]
-    assert client.get(f"/api/v1/libros/{lid}", headers=auth_headers).json()["titulo"] == LIBRO["titulo"]
-    assert len(client.get("/api/v1/libros?q=cien", headers=auth_headers).json()) == 1
-    assert client.get("/api/v1/libros?categoria=Otra", headers=auth_headers).json() == []
+    assert client.get(f"/api/v1/libros/{lid}", headers=admin_headers).json()["titulo"] == LIBRO["titulo"]
+    assert len(client.get("/api/v1/libros?q=cien", headers=admin_headers).json()) == 1
+    assert client.get("/api/v1/libros?categoria=Otra", headers=admin_headers).json() == []
 
-    upd = client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "editorial": "Oveja Negra", "ejemplares_totales": 5}, headers=auth_headers)
+    upd = client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "editorial": "Oveja Negra", "ejemplares_totales": 5}, headers=admin_headers)
     assert upd.status_code == 200
     assert upd.json()["editorial"] == "Oveja Negra" and upd.json()["ejemplares_disponibles"] == 5
 
-    assert client.delete(f"/api/v1/libros/{lid}", headers=auth_headers).status_code == 204
-    assert client.get(f"/api/v1/libros/{lid}", headers=auth_headers).status_code == 404
+    assert client.delete(f"/api/v1/libros/{lid}", headers=admin_headers).status_code == 204
+    assert client.get(f"/api/v1/libros/{lid}", headers=admin_headers).status_code == 404
 
 
 # ===== Integración 3: manejo de errores HTTP =====
-def test_errores_http(client, auth_headers):
-    assert client.get("/api/v1/libros/999", headers=auth_headers).status_code == 404
-    assert client.delete("/api/v1/libros/999", headers=auth_headers).status_code == 404
-    assert client.post("/api/v1/libros", json={"titulo": ""}, headers=auth_headers).status_code == 422
-    assert client.get("/api/v1/libros?limit=0", headers=auth_headers).status_code == 422
+def test_errores_http(client, admin_headers):
+    assert client.get("/api/v1/libros/999", headers=admin_headers).status_code == 404
+    assert client.delete("/api/v1/libros/999", headers=admin_headers).status_code == 404
+    assert client.post("/api/v1/libros", json={"titulo": ""}, headers=admin_headers).status_code == 422
+    assert client.get("/api/v1/libros?limit=0", headers=admin_headers).status_code == 422
     assert client.post("/api/v1/auth/register", json={**USUARIO, "password": "corta"}).status_code == 422
     assert client.get("/api/v1/libros", headers={"Authorization": "Bearer token.falso.xx"}).status_code == 401
 
     # libro con préstamos no se puede borrar (409); no se puede bajar el total por debajo de lo prestado
-    lid = client.post("/api/v1/libros", json={**LIBRO, "ejemplares_totales": 1}, headers=auth_headers).json()["id"]
+    lid = client.post("/api/v1/libros", json={**LIBRO, "ejemplares_totales": 1}, headers=admin_headers).json()["id"]
     with client.session_factory() as s:
         uid = s.query(Usuario).first().id
         service = PrestamosService(
@@ -87,14 +90,33 @@ def test_errores_http(client, auth_headers):
             SQLAlchemyUnitOfWork(s),
         )
         service.crear_prestamo(libro_id=lid, usuario_id=uid)
-    assert client.delete(f"/api/v1/libros/{lid}", headers=auth_headers).status_code == 409
-    assert client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "ejemplares_totales": 0}, headers=auth_headers).status_code == 409
+    assert client.delete(f"/api/v1/libros/{lid}", headers=admin_headers).status_code == 409
+    assert client.put(f"/api/v1/libros/{lid}", json={**LIBRO, "ejemplares_totales": 0}, headers=admin_headers).status_code == 409
+
+
+def test_rbac_usuario_solo_lectura(client, auth_headers):
+    assert client.get("/api/v1/libros", headers=auth_headers).status_code == 200
+    assert client.post("/api/v1/libros", json=LIBRO, headers=auth_headers).status_code == 403
+    assert client.delete("/api/v1/libros/1", headers=auth_headers).status_code == 403
+
+
+def test_cambio_de_rol_invalida_token_anterior(client, auth_headers):
+    with client.session_factory() as session:
+        usuario = session.query(Usuario).filter_by(email=USUARIO["email"]).one()
+        usuario.rol = "ADMIN"
+        session.commit()
+
+    assert client.get("/api/v1/libros", headers=auth_headers).status_code == 401
+
+
+def test_rbac_admin_puede_escribir_libros(client, admin_headers):
+    assert client.post("/api/v1/libros", json=LIBRO, headers=admin_headers).status_code == 201
 
 
 # ===== IA: RAG + errores del LLM =====
-def test_ia_usa_rag_y_llm(client, auth_headers, monkeypatch):
-    client.post("/api/v1/libros", json=LIBRO, headers=auth_headers)
-    client.post("/api/v1/libros", json={"titulo": "Clean Code", "autor": "Robert Martin", "categoria": "Software"}, headers=auth_headers)
+def test_ia_usa_rag_y_llm(client, admin_headers, monkeypatch):
+    client.post("/api/v1/libros", json=LIBRO, headers=admin_headers)
+    client.post("/api/v1/libros", json={"titulo": "Clean Code", "autor": "Robert Martin", "categoria": "Software"}, headers=admin_headers)
     capturado = {}
 
     def falso(prompt):
@@ -102,7 +124,7 @@ def test_ia_usa_rag_y_llm(client, auth_headers, monkeypatch):
         return llm.LLMResult("Yes, we have it.", 100, 10, 50, "fake")
 
     monkeypatch.setattr(llm, "generate", falso)
-    r = client.post("/api/v1/ai/ask", json={"question": "Do you have books by Márquez?", "technique": "few-shot"}, headers=auth_headers)
+    r = client.post("/api/v1/ai/ask", json={"question": "Do you have books by Márquez?", "technique": "few-shot"}, headers=admin_headers)
     assert r.status_code == 200 and r.json()["sources"] == [1]
     assert "Cien años de soledad" in capturado["prompt"] and "Clean Code" not in capturado["prompt"]
     assert client.post("/api/v1/ai/ask", json={"question": "hola libros"}).status_code == 401  # requiere login

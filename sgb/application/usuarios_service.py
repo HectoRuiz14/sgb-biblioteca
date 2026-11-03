@@ -60,8 +60,10 @@ class UsuariosService:
             raise InvalidCredentialsError("Invalid email or password")
         if not usuario.activo:
             raise InactiveUserError("Account is inactive")
+        if usuario.id is None:
+            raise RuntimeError("Authenticated user has no database ID")
 
-        token = self.token_service.create_token(usuario.id)
+        token = self.token_service.create_token(usuario.id, roles=[usuario.rol])
         return token, usuario
 
     def obtener_por_id(self, usuario_id: int) -> Optional[Usuario]:

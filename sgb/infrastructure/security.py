@@ -5,11 +5,13 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 import time
 from typing import Any, Dict, Optional
 
+from sgb.domain.usuarios.entities import ROLES_VALIDOS, ROL_POR_DEFECTO
 from sgb.domain.usuarios.ports import PasswordHasherPort, TokenPort
 
 ITERATIONS = 600_000
@@ -21,7 +23,10 @@ class TokenError(Exception):
 
 
 def _secret() -> bytes:
-    return os.getenv("SECRET_KEY", "dev-secret-change-me").encode()
+    secret = os.getenv("SECRET_KEY")
+    if not secret or secret in {"dev-secret-change-me", "cambia-esto"}:
+        raise RuntimeError("Set SECRET_KEY to a unique, random value before using JWT authentication")
+    return secret.encode()
 
 
 def _b64e(raw: bytes) -> str:
@@ -57,11 +62,23 @@ def _sign(signing_input: str) -> str:
     return _b64e(hmac.new(_secret(), signing_input.encode(), hashlib.sha256).digest())
 
 
-def create_access_token(user_id: int, minutes: int | None = None) -> str:
+def create_access_token(
+    user_id: int,
+    minutes: int | None = None,
+    roles: list[str] | None = None,
+) -> str:
     minutes = TOKEN_MINUTES_DEFAULT if minutes is None else minutes
+    roles = [ROL_POR_DEFECTO] if roles is None else list(dict.fromkeys(roles))
+    if not roles or any(role not in ROLES_VALIDOS for role in roles):
+        raise ValueError(f"roles must be a non-empty subset of {sorted(ROLES_VALIDOS)}")
     now = int(time.time())
     header = _b64e(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
-    payload = _b64e(json.dumps({"sub": str(user_id), "iat": now, "exp": now + minutes * 60}, separators=(",", ":")).encode())
+    payload = _b64e(
+        json.dumps(
+            {"sub": str(user_id), "iat": now, "exp": now + minutes * 60, "roles": roles},
+            separators=(",", ":"),
+        ).encode()
+    )
     signing_input = f"{header}.{payload}"
     return f"{signing_input}.{_sign(signing_input)}"
 
@@ -69,17 +86,38 @@ def create_access_token(user_id: int, minutes: int | None = None) -> str:
 def decode_access_token(token: str) -> dict:
     try:
         header_b64, payload_b64, signature = token.split(".")
+        header = json.loads(_b64d(header_b64))
+        payload = json.loads(_b64d(payload_b64))
+        if not isinstance(header, dict) or not isinstance(payload, dict):
+            raise TokenError("Malformed token")
+        if header.get("alg") != "HS256":
+            raise TokenError("Unsupported algorithm")
         if not hmac.compare_digest(signature, _sign(f"{header_b64}.{payload_b64}")):
             raise TokenError("Invalid signature")
-        if json.loads(_b64d(header_b64)).get("alg") != "HS256":
-            raise TokenError("Unsupported algorithm")
-        payload = json.loads(_b64d(payload_b64))
+        expiration = payload.get("exp")
+        roles = payload.get("roles")
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject:
+            raise TokenError("Invalid subject")
+        if (
+            isinstance(expiration, bool)
+            or not isinstance(expiration, (int, float))
+            or not math.isfinite(expiration)
+        ):
+            raise TokenError("Invalid expiration")
+        if expiration <= time.time():
+            raise TokenError("Token expired")
+        if (
+            not isinstance(roles, list)
+            or not roles
+            or any(not isinstance(role, str) or role not in ROLES_VALIDOS for role in roles)
+            or len(roles) != len(set(roles))
+        ):
+            raise TokenError("Invalid roles claim")
     except TokenError:
         raise
-    except Exception as e:  # formato roto
+    except (ValueError, TypeError, UnicodeDecodeError) as e:
         raise TokenError("Malformed token") from e
-    if payload.get("exp", 0) < time.time():
-        raise TokenError("Token expired")
     return payload
 
 
@@ -92,8 +130,13 @@ class PasswordHasher(PasswordHasherPort):
 
 
 class JWTTokenService(TokenPort):
-    def create_token(self, user_id: int, minutes: Optional[int] = None) -> str:
-        return create_access_token(user_id, minutes)
+    def create_token(
+        self,
+        user_id: int,
+        minutes: Optional[int] = None,
+        roles: Optional[list[str]] = None,
+    ) -> str:
+        return create_access_token(user_id, minutes, roles)
 
     def decode_token(self, token: str) -> Dict[str, Any]:
         return decode_access_token(token)

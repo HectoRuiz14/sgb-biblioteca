@@ -70,6 +70,7 @@ class Usuario(Base):
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     identificacion: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     tipo_usuario: Mapped[str] = mapped_column(String(20), default="estudiante")
+    rol: Mapped[str] = mapped_column(String(20), default="USER", nullable=False, server_default="USER")
     contacto: Mapped[Optional[str]] = mapped_column(String(120))
     activo: Mapped[bool] = mapped_column(default=True)
     email: Mapped[Optional[str]] = mapped_column(String(120), unique=True, index=True)
@@ -82,6 +83,13 @@ class Usuario(Base):
         tipos_validos = {"estudiante", "docente", "externo"}
         if value not in tipos_validos:
             raise ValueError(f"tipo_usuario debe ser uno de {tipos_validos}")
+        return value
+
+    @validates("rol")
+    def validar_rol(self, key, value):
+        roles_validos = {"ADMIN", "USER"}
+        if value not in roles_validos:
+            raise ValueError(f"rol debe ser uno de {roles_validos}")
         return value
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 import sgb.infrastructure.models  # noqa: F401  (registra las tablas en Base.metadata)
 from sgb.infrastructure.database import Base, get_session
+from sgb.infrastructure.models import Usuario
 from sgb.main import app
 
 USUARIO = {"nombre": "Ana Torres", "identificacion": "1001", "email": "ana@example.com",
@@ -36,6 +37,20 @@ def client():
     yield c
     app.dependency_overrides.clear()
     engine.dispose()
+
+
+@pytest.fixture()
+def admin_headers(client, auth_headers):
+    with client.session_factory() as session:
+        usuario = session.query(Usuario).filter_by(email=USUARIO["email"]).one()
+        usuario.rol = "ADMIN"
+        session.commit()
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": USUARIO["email"], "password": USUARIO["password"]},
+    )
+    assert response.status_code == 200 and response.json()["roles"] == ["ADMIN"]
+    return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
 @pytest.fixture()

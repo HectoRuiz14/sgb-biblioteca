@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
 TIPOS_USUARIO_VALIDOS = {"estudiante", "docente", "externo"}
+ROLES_VALIDOS = {"ADMIN", "USER"}
+ROL_POR_DEFECTO = "USER"
 
 
 @dataclass
@@ -11,6 +13,7 @@ class Usuario:
     nombre: str = ""
     identificacion: str = ""
     tipo_usuario: str = "estudiante"
+    rol: str = ROL_POR_DEFECTO
     contacto: Optional[str] = None
     activo: bool = True
     email: Optional[str] = None
@@ -21,6 +24,8 @@ class Usuario:
     def __post_init__(self):
         if self.tipo_usuario not in TIPOS_USUARIO_VALIDOS:
             raise ValueError(f"tipo_usuario debe ser uno de {TIPOS_USUARIO_VALIDOS}")
+        if self.rol not in ROLES_VALIDOS:
+            raise ValueError(f"rol debe ser uno de {ROLES_VALIDOS}")
 
     def __setattr__(self, name: str, value: Any):
         super().__setattr__(name, value)

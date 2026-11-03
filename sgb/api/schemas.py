@@ -4,6 +4,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 TipoUsuario = Literal["estudiante", "docente", "externo"]
+RolUsuario = Literal["ADMIN", "USER"]
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
@@ -29,12 +30,14 @@ class UsuarioOut(BaseModel):
     identificacion: str
     email: Optional[str] = None
     tipo_usuario: str
+    rol: RolUsuario
     activo: bool
 
 
 class TokenOut(BaseModel):
     access_token: str = Field(..., description="JWT to send as 'Authorization: Bearer <token>'")
     token_type: str = "bearer"
+    roles: List[RolUsuario]
     usuario: UsuarioOut
 
 

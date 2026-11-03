@@ -53,6 +53,7 @@ def test_register_usuario_exitoso(mock_usuarios_deps):
     usuario_repo.crear.assert_called_once()
     assert resultado.id == 1
     assert resultado.email == "carlos@example.com"
+    assert resultado.rol == "USER"
 
 
 def test_register_email_duplicado_lanza_error(mock_usuarios_deps):
@@ -89,7 +90,7 @@ def test_login_exitoso(mock_usuarios_deps):
     token, usuario = service.login("ana@example.com", "clave_correcta")
 
     hasher.verify.assert_called_once_with("clave_correcta", "hashed_clave")
-    token_service.create_token.assert_called_once_with(7)
+    token_service.create_token.assert_called_once_with(7, roles=["USER"])
     assert token == "jwt.token.mock"
     assert usuario.id == 7
 

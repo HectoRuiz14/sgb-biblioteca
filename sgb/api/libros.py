@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
-from sgb.api.deps import get_catalogo_service, get_current_user
+from sgb.api.deps import get_catalogo_service, require_roles
 from sgb.api.schemas import ErrorOut, LibroIn, LibroOut
 from sgb.application.catalogo_service import CatalogoService
 from sgb.domain.catalogo.entities import Libro
@@ -10,8 +10,13 @@ from sgb.domain.exceptions import (
     LibroNotFoundError,
 )
 
-router = APIRouter(prefix="/api/v1/libros", tags=["Books"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/api/v1/libros",
+    tags=["Books"],
+    dependencies=[Depends(require_roles(["USER", "ADMIN"]))],
+)
 R401 = {401: {"model": ErrorOut, "description": "Missing or invalid token"}}
+R403 = {403: {"model": ErrorOut, "description": "Insufficient permissions"}}
 R404 = {404: {"model": ErrorOut, "description": "Book not found"}, **R401}
 
 
@@ -32,7 +37,8 @@ def to_out(l: Libro) -> LibroOut:
     "",
     response_model=LibroOut,
     status_code=status.HTTP_201_CREATED,
-    responses=R401,
+    dependencies=[Depends(require_roles(["ADMIN"]))],
+    responses={**R401, **R403},
     summary="Create a book",
     description="Adds a book to the catalog. The author and category are created automatically if they do not exist.",
 )
@@ -89,7 +95,12 @@ def obtener_libro(
 @router.put(
     "/{libro_id}",
     response_model=LibroOut,
-    responses={409: {"model": ErrorOut, "description": "Total copies lower than copies on loan"}, **R404},
+    dependencies=[Depends(require_roles(["ADMIN"]))],
+    responses={
+        409: {"model": ErrorOut, "description": "Total copies lower than copies on loan"},
+        **R404,
+        **R403,
+    },
     summary="Update a book",
     description="Replaces the book data. Changing the total copies adjusts the available copies by the same difference.",
 )
@@ -118,7 +129,12 @@ def actualizar_libro(
 @router.delete(
     "/{libro_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={409: {"model": ErrorOut, "description": "Book has loan history"}, **R404},
+    dependencies=[Depends(require_roles(["ADMIN"]))],
+    responses={
+        409: {"model": ErrorOut, "description": "Book has loan history"},
+        **R404,
+        **R403,
+    },
     summary="Delete a book",
     description="Removes a book. Books with loan history cannot be deleted (409).",
 )

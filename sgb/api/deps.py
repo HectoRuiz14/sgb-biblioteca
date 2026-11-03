@@ -1,4 +1,6 @@
 """Inyección y ensamblado de dependencias para FastAPI."""
+from collections.abc import Callable
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -9,7 +11,7 @@ from sgb.application.catalogo_service import CatalogoService
 from sgb.application.datos_abiertos_service import DatosAbiertosService
 from sgb.application.prestamos_service import PrestamosService
 from sgb.application.usuarios_service import UsuariosService
-from sgb.domain.usuarios.entities import Usuario
+from sgb.domain.usuarios.entities import ROLES_VALIDOS, Usuario
 from sgb.infrastructure.database import get_session
 from sgb.infrastructure.datos_abiertos.adapters import (
     BibliotecasDatosGovAdapter,
@@ -113,8 +115,26 @@ def get_current_user(
     try:
         payload = decode_access_token(cred.credentials)
         user = service.obtener_por_id(int(payload["sub"]))
-    except (TokenError, KeyError, ValueError):
+        if user is not None and user.rol not in payload["roles"]:
+            raise TokenError("Token roles do not match the user's current role")
+    except (TokenError, KeyError, TypeError, ValueError):
         raise unauthorized
     if user is None or not user.activo:
         raise unauthorized
     return user
+
+
+def require_roles(required_roles: list[str]) -> Callable[..., Usuario]:
+    roles = frozenset(required_roles)
+    if not roles or not roles.issubset(ROLES_VALIDOS):
+        raise ValueError(f"required_roles must be a non-empty subset of {sorted(ROLES_VALIDOS)}")
+
+    def check_roles(user: Usuario = Depends(get_current_user)) -> Usuario:
+        if user.rol not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return user
+
+    return check_roles

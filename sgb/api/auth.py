@@ -60,7 +60,11 @@ def login(
 ):
     try:
         token, usuario = service.login(data.email, data.password)
-        return TokenOut(access_token=token, usuario=UsuarioOut.model_validate(usuario))
+        return TokenOut(
+            access_token=token,
+            roles=[usuario.rol],
+            usuario=UsuarioOut.model_validate(usuario),
+        )
     except InvalidCredentialsError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     except InactiveUserError:

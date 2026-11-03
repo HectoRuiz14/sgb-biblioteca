@@ -56,7 +56,12 @@ class PasswordHasherPort(ABC):
 
 class TokenPort(ABC):
     @abstractmethod
-    def create_token(self, user_id: int, minutes: Optional[int] = None) -> str:
+    def create_token(
+        self,
+        user_id: int,
+        minutes: Optional[int] = None,
+        roles: Optional[List[str]] = None,
+    ) -> str:
         """Genera un token de acceso para un usuario."""
         pass
 
