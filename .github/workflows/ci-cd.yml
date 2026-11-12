@@ -1,0 +1,107 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --only-binary :all: -r requirements.txt
+          pip install mutmut
+
+      - name: Verify migrations
+        env:
+          DATABASE_URL: sqlite:///ci.db
+        run: alembic upgrade head
+
+      - name: Run pytest
+        env:
+          SECRET_KEY: ci-secret-key
+        run: pytest tests/ -v
+
+      - name: Run mutation tests
+        env:
+          SECRET_KEY: ci-secret-key
+          DATABASE_URL: sqlite:///ci.db
+        run: |
+          mutmut run
+          mutmut results
+
+  build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: sgb-biblioteca:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  push:
+    name: Push image to Docker Hub
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/sgb-biblioteca:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/sgb-biblioteca:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to PaaS
+    runs-on: ubuntu-latest
+    needs: push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$RENDER_DEPLOY_HOOK_URL" || {
+            echo "RENDER_DEPLOY_HOOK_URL secret is required" >&2
+            exit 1
+          }
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"

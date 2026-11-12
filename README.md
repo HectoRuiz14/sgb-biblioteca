@@ -19,6 +19,15 @@ uvicorn sgb.main:app --reload
 
 > Si ya tenías un `biblioteca.db`, `alembic upgrade head` agrega las migraciones pendientes; no pierdes datos y los usuarios existentes reciben el rol `USER`.
 
+## Docker Compose
+Requiere Docker Compose v2. Copia `.env.example` a `.env` y define `SECRET_KEY` con un valor aleatorio (por ejemplo, `python -c "import secrets; print(secrets.token_hex(32))"`). Luego ejecuta:
+```bash
+docker compose up --build
+```
+Compose espera a que PostgreSQL pase su healthcheck, aplica las migraciones y después inicia FastAPI. La API queda disponible en `http://localhost:8000`; las variables `POSTGRES_*` y `APP_PORT` permiten cambiar las credenciales de desarrollo y los puertos.
+
+El pipeline de GitHub Actions ejecuta las pruebas, construye la imagen y, al hacer push a `main`, la publica en Docker Hub y llama el webhook de Render. Configura los secretos `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` y `RENDER_DEPLOY_HOOK_URL` en el repositorio de GitHub.
+
 ## Endpoints
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
