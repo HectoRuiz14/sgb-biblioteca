@@ -28,6 +28,8 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app alembic.ini .
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app sgb ./sgb
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 USER app
 EXPOSE 8000
@@ -35,4 +37,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
 
-CMD ["uvicorn", "sgb.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/start.sh"]
