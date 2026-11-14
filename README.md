@@ -28,6 +28,9 @@ Compose espera a que PostgreSQL pase su healthcheck, aplica las migraciones y de
 
 El pipeline de GitHub Actions ejecuta las pruebas, construye la imagen y, al hacer push a `main`, la publica en Docker Hub y llama el webhook de Render. Configura los secretos `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` y `RENDER_DEPLOY_HOOK_URL` en el repositorio de GitHub.
 
+## Render + Supabase
+En Render configura `DATABASE_URL` como variable de entorno con la URL del **Session Pooler** de Supabase y el esquema `postgresql+psycopg://`. No guardes credenciales en el repositorio. Configura `alembic upgrade head` como comando de pre-despliegue para aplicar las migraciones antes de iniciar la API. Si falta `DATABASE_URL`, la aplicación falla al arrancar en lugar de conectarse accidentalmente a una base SQLite local.
+
 ## Endpoints
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|

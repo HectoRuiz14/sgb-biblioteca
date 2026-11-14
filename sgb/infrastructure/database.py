@@ -1,13 +1,15 @@
 """
 Configuración central de SQLAlchemy: engine, sesión y clase base declarativa.
-Usa SQLite por defecto. La URL se puede sobreescribir con la variable de
-entorno DATABASE_URL (por ejemplo sqlite:///:memory: para pruebas).
+La conexión se configura con la variable de entorno DATABASE_URL.
 """
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///biblioteca.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    raise RuntimeError("La variable de entorno DATABASE_URL es obligatoria.")
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
@@ -15,11 +17,11 @@ _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite"
 engine = create_engine(
     DATABASE_URL,
     echo=os.getenv("SQL_ECHO", "0") == "1",
-    future=True,
     connect_args=_connect_args,
+    pool_pre_ping=True,
 )
 
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 class Base(DeclarativeBase):
